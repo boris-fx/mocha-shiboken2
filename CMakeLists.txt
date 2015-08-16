@@ -1,8 +1,8 @@
 Include(icecc.cmake)
 project(shiboken)
 
-cmake_minimum_required(VERSION 3.1.3)
-cmake_policy(VERSION 3.1.3)
+cmake_minimum_required(VERSION 3.0)
+cmake_policy(VERSION 3.0)
 
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/Modules/
                       ${CMAKE_MODULE_PATH})
@@ -52,6 +52,7 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS "/Zc:wchar_t- /GR /EHsc /DWIN32 /D_WINDOWS /D_SCL_SECURE_NO_WARNINGS")
 else()
     if(CMAKE_HOST_UNIX AND NOT CYGWIN)
+        add_definitions(-fPIC)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -fvisibility=hidden -Wno-strict-aliasing")
     endif()
     set(CMAKE_CXX_FLAGS_DEBUG "-g")
