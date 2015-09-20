@@ -25,6 +25,7 @@
 #include "overloaddata.h"
 #include <reporthandler.h>
 #include <typedatabase.h>
+#include <iostream>
 
 #include <QtCore/QDir>
 #include <QtCore/QDebug>
@@ -132,10 +133,12 @@ void ShibokenGenerator::initPrimitiveTypesCorrespondences()
     m_pythonPrimitiveTypeName["unsigned long"] = "PyLong";
     m_pythonPrimitiveTypeName["signed long"] = "PyLong";
     m_pythonPrimitiveTypeName["ulong"] = "PyLong";
+    m_pythonPrimitiveTypeName["unsigned long int"] = "PyLong";
     m_pythonPrimitiveTypeName["long long"] = "PyLong";
     m_pythonPrimitiveTypeName["__int64"] = "PyLong";
     m_pythonPrimitiveTypeName["unsigned long long"] = "PyLong";
     m_pythonPrimitiveTypeName["unsigned __int64"] = "PyLong";
+    m_pythonPrimitiveTypeName["size_t"] = "PyLong";
 
     // Python operators
     m_pythonOperators.clear();
@@ -640,7 +643,7 @@ QString ShibokenGenerator::cpythonBaseName(const TypeEntry* type)
         while (ptype->basicAliasedTypeEntry())
             ptype = ptype->basicAliasedTypeEntry();
         if (ptype->targetLangApiName() == ptype->name())
-            baseName = m_pythonPrimitiveTypeName[ptype->name()];
+            baseName = pythonPrimitiveTypeName(ptype->name());
         else
             baseName = ptype->targetLangApiName();
     } else if (type->isEnum()) {
@@ -779,7 +782,18 @@ QString ShibokenGenerator::fixedCppTypeName(const TypeEntry* type, QString typeN
 
 QString ShibokenGenerator::pythonPrimitiveTypeName(const QString& cppTypeName)
 {
-    return ShibokenGenerator::m_pythonPrimitiveTypeName.value(cppTypeName, QString());
+    QString rv = ShibokenGenerator::m_pythonPrimitiveTypeName.value(cppTypeName, QString());
+    if (rv.isEmpty()) {
+        // activate this when some primitive types are missing,
+        // i.e. when shiboken itself fails to build.
+        // In general, this is valid while just called by isNumeric()
+        // used on Qt5, 2015-09-20
+        if (false) {
+            std::cerr << "primitive type not found: " << qPrintable(cppTypeName) << std::endl;
+            abort();
+        }
+    }
+    return rv;
 }
 
 QString ShibokenGenerator::pythonPrimitiveTypeName(const PrimitiveTypeEntry* type)
