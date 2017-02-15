@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2017 The Qt Company Ltd.
 ** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of PySide2.
@@ -26,22 +26,23 @@
 **
 ****************************************************************************/
 
-#ifndef SHIBOKENNORMALIZE_P_H
-#define SHIBOKENNORMALIZE_P_H
+#ifndef ABSTRACTMETALANG_TYPEDEFS_H
+#define ABSTRACTMETALANG_TYPEDEFS_H
 
-#include <QMetaObject>
-#include <QByteArray>
+#include <QtCore/QList>
 
+class AbstractMetaField;
+class AbstractMetaArgument;
+class AbstractMetaEnum;
+class AbstractMetaEnumValueList;
+class AbstractMetaFunction;
+class AbstractMetaClassList;
+class AbstractMetaType;
 
-#if (QT_VERSION < QT_VERSION_CHECK(4, 7, 0))
-    QByteArray QMetaObject_normalizedTypeQt47(const char *type);
-    QByteArray QMetaObject_normalizedSignatureQt47(const char *type);
+typedef QList<AbstractMetaArgument *> AbstractMetaArgumentList;
+typedef QList<AbstractMetaEnum *> AbstractMetaEnumList;
+typedef QList<AbstractMetaField *> AbstractMetaFieldList;
+typedef QList<AbstractMetaFunction *> AbstractMetaFunctionList;
+typedef QList<AbstractMetaType *> AbstractMetaTypeList;
 
-    #define SBK_NORMALIZED_TYPE(x) QMetaObject_normalizedTypeQt47(x)
-    #define SBK_NORMALIZED_SIGNATURE(x) QMetaObject_normalizedSignatureQt47(x)
-#else
-    #define SBK_NORMALIZED_TYPE(x) QMetaObject::normalizedType(x)
-    #define SBK_NORMALIZED_SIGNATURE(x) QMetaObject::normalizedSignature(x)
-#endif
-
-#endif //SHIBOKENNORMALIZE_P_H
+#endif // ABSTRACTMETALANG_TYPEDEFS_H

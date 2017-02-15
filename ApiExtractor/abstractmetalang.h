@@ -29,12 +29,12 @@
 #ifndef ABSTRACTMETALANG_H
 #define ABSTRACTMETALANG_H
 
-#include "typesystem.h"
+#include "abstractmetalang_typedefs.h"
+#include "typesystem_enums.h"
+#include "typesystem_typedefs.h"
 
-#include <QtCore/QSet>
+#include <QtCore/qobjectdefs.h>
 #include <QtCore/QStringList>
-#include <QtCore/QTextStream>
-#include <QSharedPointer>
 
 QT_FORWARD_DECLARE_CLASS(QDebug)
 
@@ -48,6 +48,18 @@ class AbstractMetaArgument;
 class AbstractMetaEnumValue;
 class AbstractMetaEnum;
 class QPropertySpec;
+
+class CodeSnip;
+class ComplexTypeEntry;
+class EnumTypeEntry;
+class FlagsTypeEntry;
+class FunctionTypeEntry;
+class TypeEntry;
+
+struct ArgumentOwner;
+struct FieldModification;
+struct FunctionModification;
+struct ReferenceCount;
 
 class Documentation
 {
@@ -84,9 +96,6 @@ private:
 
 };
 
-typedef QList<AbstractMetaField *> AbstractMetaFieldList;
-typedef QList<AbstractMetaArgument *> AbstractMetaArgumentList;
-typedef QList<AbstractMetaFunction *> AbstractMetaFunctionList;
 class AbstractMetaClassList : public  QList<AbstractMetaClass *>
 {
 public:
@@ -306,7 +315,6 @@ Q_DECLARE_OPERATORS_FOR_FLAGS(AbstractMetaAttributes::Attributes)
 QDebug operator<<(QDebug d, const AbstractMetaAttributes *aa);
 #endif
 
-typedef QList<AbstractMetaType*> AbstractMetaTypeList;
 class AbstractMetaType
 {
     Q_GADGET
@@ -336,21 +344,9 @@ public:
     AbstractMetaType();
     ~AbstractMetaType();
 
-    QString package() const
-    {
-        return m_typeEntry->targetLangPackage();
-    }
-    QString name() const
-    {
-        if (m_name.isNull())
-            // avoid constLast to stay Qt 5.5 compatible
-            m_name = m_typeEntry->targetLangName().split(QLatin1String("::")).last();
-        return m_name;
-    }
-    QString fullName() const
-    {
-        return m_typeEntry->qualifiedTargetLangName();
-    }
+    QString package() const;
+    QString name() const;
+    QString fullName() const;
 
     void setTypeUsagePattern(TypeUsagePattern pattern)
     {
@@ -521,10 +517,7 @@ public:
      *   /return true if the type is to be implemented using target
      *   language enums
      */
-    bool isTargetLangEnum() const
-    {
-        return isEnum() && !((EnumTypeEntry *) typeEntry())->forceInteger();
-    }
+    bool isTargetLangEnum() const;
     bool isIntegerEnum() const
     {
         return isEnum() && !isTargetLangEnum();
@@ -536,10 +529,7 @@ public:
      *   /return true if the type is to be implemented using target
      *   language QFlags
      */
-    bool isTargetLangFlags() const
-    {
-        return isFlags() && !((FlagsTypeEntry *) typeEntry())->forceInteger();
-    }
+    bool isTargetLangFlags() const;
     bool isIntegerFlags() const
     {
         return isFlags() && !isTargetLangFlags();
@@ -1154,7 +1144,7 @@ public:
     *   The code snips can be filtered by position and language.
     *   \return list of code snips
     */
-    CodeSnipList injectedCodeSnips(CodeSnip::Position position = CodeSnip::Any,
+    CodeSnipList injectedCodeSnips(TypeSystem::CodeSnipPosition position = TypeSystem::CodeSnipPositionAny,
                                    TypeSystem::Language language = TypeSystem::All) const;
 
     /**
@@ -1203,6 +1193,11 @@ public:
     }
 
     bool isCallOperator() const;
+
+#ifndef QT_NO_DEBUG_STREAM
+    void formatDebugVerbose(QDebug &d) const;
+#endif
+
 private:
     QString m_name;
     QString m_originalName;
@@ -1324,20 +1319,11 @@ public:
         m_enumValues << enumValue;
     }
 
-    QString name() const
-    {
-        return m_typeEntry->targetLangName();
-    }
+    QString name() const;
 
-    QString qualifier() const
-    {
-        return m_typeEntry->targetLangQualifier();
-    }
+    QString qualifier() const;
 
-    QString package() const
-    {
-        return m_typeEntry->targetLangPackage();
-    }
+    QString package() const;
 
     QString fullName() const
     {
@@ -1375,10 +1361,7 @@ public:
         m_class = c;
     }
 
-    bool isAnonymous() const
-    {
-        return m_typeEntry->isAnonymous();
-    }
+    bool isAnonymous() const;
 
 private:
     AbstractMetaEnumValueList m_enumValues;
@@ -1391,8 +1374,6 @@ private:
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug d, const AbstractMetaEnum *ae);
 #endif
-
-typedef QList<AbstractMetaEnum *> AbstractMetaEnumList;
 
 class AbstractMetaClass : public AbstractMetaAttributes
 {
@@ -1459,7 +1440,7 @@ public:
               m_hasHashFunction(false),
               m_hasEqualsOperator(false),
               m_hasCloneOperator(false),
-              m_isTypeAlias(false),
+              m_isTypeDef(false),
               m_hasToStringCapability(false),
               m_enclosingClass(0),
               m_baseClass(0),
@@ -1656,35 +1637,20 @@ public:
         m_innerClasses = innerClasses;
     }
 
-    QString package() const
-    {
-        return m_typeEntry->targetLangPackage();
-    }
+    QString package() const;
 
-    bool isInterface() const
-    {
-        return m_typeEntry->isInterface();
-    }
+    bool isInterface() const;
 
-    bool isNamespace() const
-    {
-        return m_typeEntry->isNamespace();
-    }
+    bool isNamespace() const;
 
-    bool isQObject() const
-    {
-        return m_typeEntry->isQObject();
-    }
+    bool isQObject() const;
 
     bool isQtNamespace() const
     {
         return isNamespace() && name() == QLatin1String("Qt");
     }
 
-    QString qualifiedCppName() const
-    {
-        return m_typeEntry->qualifiedCppName();
-    }
+    QString qualifiedCppName() const;
 
     bool hasInconsistentFunctions() const;
     bool hasSignals() const;
@@ -1926,15 +1892,8 @@ public:
     AbstractMetaTypeList templateBaseClassInstantiations() const;
     void setTemplateBaseClassInstantiations(AbstractMetaTypeList& instantiations);
 
-    void setTypeAlias(bool typeAlias)
-    {
-        m_isTypeAlias = typeAlias;
-    }
-
-    bool isTypeAlias() const
-    {
-        return m_isTypeAlias;
-    }
+    void setTypeDef(bool typeDef) { m_isTypeDef = typeDef; }
+    bool isTypeDef() const { return m_isTypeDef; }
 
     void setStream(bool stream)
     {
@@ -1972,7 +1931,7 @@ private:
     uint m_hasHashFunction : 1;
     uint m_hasEqualsOperator : 1;
     uint m_hasCloneOperator : 1;
-    uint m_isTypeAlias : 1;
+    uint m_isTypeDef : 1;
     uint m_hasToStringCapability : 1;
 
     const AbstractMetaClass *m_enclosingClass;

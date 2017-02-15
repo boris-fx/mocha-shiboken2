@@ -29,14 +29,15 @@
 #include "testvoidarg.h"
 #include <QtTest/QTest>
 #include "testutil.h"
-
+#include <abstractmetalang.h>
+#include <typesystem.h>
 
 void TestVoidArg::testVoidParsedFunction()
 {
     const char cppCode[] = "struct A { void a(void); };";
-    const char xmlCode[] = "\
-    <typesystem package=\"Foo\">\
-        <value-type name='A'/>\
+    const char xmlCode[] = "\n\
+    <typesystem package=\"Foo\">\n\
+        <value-type name='A'/>\n\
     </typesystem>";
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
@@ -49,11 +50,11 @@ void TestVoidArg::testVoidParsedFunction()
 void TestVoidArg::testVoidAddedFunction()
 {
     const char cppCode[] = "struct A { };";
-    const char xmlCode[] = "\
-    <typesystem package=\"Foo\">\
-        <value-type name='A' >\
-            <add-function signature=\"a(void)\"/>\
-        </value-type>\
+    const char xmlCode[] = "\n\
+    <typesystem package=\"Foo\">\n\
+        <value-type name='A' >\n\
+            <add-function signature=\"a(void)\"/>\n\
+        </value-type>\n\
     </typesystem>";
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();
@@ -67,9 +68,9 @@ void TestVoidArg::testVoidAddedFunction()
 void TestVoidArg::testVoidPointerParsedFunction()
 {
     const char cppCode[] = "struct A { void a(void*); };";
-    const char xmlCode[] = "\
-    <typesystem package=\"Foo\">\
-        <value-type name='A' />\
+    const char xmlCode[] = "\n\
+    <typesystem package=\"Foo\">\n\
+        <value-type name='A' />\n\
     </typesystem>";
     TestUtil t(cppCode, xmlCode);
     AbstractMetaClassList classes = t.builder()->classes();

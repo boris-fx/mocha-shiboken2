@@ -27,6 +27,8 @@
 ****************************************************************************/
 
 #include "apiextractor.h"
+#include "abstractmetalang.h"
+
 #include <QDir>
 #include <QDebug>
 #include <QTemporaryFile>
@@ -38,6 +40,7 @@
 #include "parser/rpp/pp.h"
 #include "abstractmetabuilder.h"
 #include "typedatabase.h"
+#include "typesystem.h"
 
 static bool preprocess(const QString& sourceFile,
                        QFile& targetFile,
@@ -344,11 +347,8 @@ QDebug operator<<(QDebug d, const ApiExtractor &ae)
     d.noquote();
     d.nospace();
     d << "ApiExtractor(typeSystem=\"" << ae.typeSystem() << "\", cppFileName=\""
-      << ae.cppFileName() << ", classCount=" << ae.classCount();
-    debugFormatSequence(d, "qtMetaTypeDeclaredTypeNames", ae.qtMetaTypeDeclaredTypeNames());
-    debugFormatSequence(d, "globalEnums", ae.globalEnums());
-    debugFormatSequence(d, "globalFunctions", ae.globalFunctions());
-    debugFormatSequence(d, "classes", ae.classes());
+      << ae.cppFileName() << ", ";
+    ae.m_builder->formatDebug(d);
     d << ')';
     return d;
 }

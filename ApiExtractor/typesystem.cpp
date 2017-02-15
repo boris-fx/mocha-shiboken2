@@ -453,10 +453,10 @@ static QString checkSignatureError(const QString& signature, const QString& tag)
     QString funcName = signature.left(signature.indexOf(QLatin1Char('('))).trimmed();
     static QRegExp whiteSpace(QLatin1String("\\s"));
     if (!funcName.startsWith(QLatin1String("operator ")) && funcName.contains(whiteSpace)) {
-        return QStringLiteral("Error in <%1> tag signature attribute '%2'.\n"
-                              "White spaces aren't allowed in function names, "
-                              "and return types should not be part of the signature.")
-                              .arg(tag, signature);
+        return QString::fromLatin1("Error in <%1> tag signature attribute '%2'.\n"
+                                   "White spaces aren't allowed in function names, "
+                                   "and return types should not be part of the signature.")
+                                   .arg(tag, signature);
     }
     return QString();
 }
@@ -903,13 +903,13 @@ bool Handler::startElement(const QString &, const QString &n,
                                 | StackElement::ModifyField;
         if (m_current->parent && m_current->parent->type & validParent) {
             QString modeName = attributes[QLatin1String("mode")];
-            DocModification::Mode mode;
+            TypeSystem::DocModificationMode mode;
             if (modeName == QLatin1String("append")) {
-                mode = DocModification::Append;
+                mode = TypeSystem::DocModificationAppend;
             } else if (modeName == QLatin1String("prepend")) {
-                mode = DocModification::Prepend;
+                mode = TypeSystem::DocModificationPrepend;
             } else if (modeName == QLatin1String("replace")) {
-                mode = DocModification::Replace;
+                mode = TypeSystem::DocModificationReplace;
             } else {
                 m_error = QLatin1String("Unknow documentation injection mode: ") + modeName;
                 return false;
@@ -1715,15 +1715,15 @@ bool Handler::startElement(const QString &, const QString &n,
             }
 
 
-            static QHash<QString, CodeSnip::Position> positionNames;
+            static QHash<QString, TypeSystem::CodeSnipPosition> positionNames;
             if (positionNames.isEmpty()) {
-                positionNames[QLatin1String("beginning")] = CodeSnip::Beginning;
-                positionNames[QLatin1String("end")] = CodeSnip::End;
+                positionNames.insert(QLatin1String("beginning"), TypeSystem::CodeSnipPositionBeginning);
+                positionNames.insert(QLatin1String("end"), TypeSystem::CodeSnipPositionEnd);
                 // QtScript
-                positionNames[QLatin1String("declaration")] = CodeSnip::Declaration;
-                positionNames[QLatin1String("prototype-initialization")] = CodeSnip::PrototypeInitialization;
-                positionNames[QLatin1String("constructor-initialization")] = CodeSnip::ConstructorInitialization;
-                positionNames[QLatin1String("constructor")] = CodeSnip::Constructor;
+                positionNames.insert(QLatin1String("declaration"), TypeSystem::CodeSnipPositionDeclaration);
+                positionNames.insert(QLatin1String("prototype-initialization"), TypeSystem::CodeSnipPositionPrototypeInitialization);
+                positionNames.insert(QLatin1String("constructor-initialization"), TypeSystem::CodeSnipPositionConstructorInitialization);
+                positionNames.insert(QLatin1String("constructor"), TypeSystem::CodeSnipPositionConstructor);
             }
 
             QString position = attributes[QLatin1String("position")].toLower();
@@ -1871,16 +1871,16 @@ bool Handler::startElement(const QString &, const QString &n,
     return true;
 }
 
-PrimitiveTypeEntry* PrimitiveTypeEntry::basicAliasedTypeEntry() const
+PrimitiveTypeEntry *PrimitiveTypeEntry::basicReferencedTypeEntry() const
 {
-    if (!m_aliasedTypeEntry)
+    if (!m_referencedTypeEntry)
         return 0;
 
-    PrimitiveTypeEntry* baseAliasTypeEntry = m_aliasedTypeEntry->basicAliasedTypeEntry();
-    if (baseAliasTypeEntry)
-        return baseAliasTypeEntry;
+    PrimitiveTypeEntry *baseReferencedTypeEntry = m_referencedTypeEntry->basicReferencedTypeEntry();
+    if (baseReferencedTypeEntry)
+        return baseReferencedTypeEntry;
     else
-        return m_aliasedTypeEntry;
+        return m_referencedTypeEntry;
 }
 
 typedef QHash<const PrimitiveTypeEntry*, QString> PrimitiveTypeEntryTargetLangPackageMap;
@@ -2043,12 +2043,18 @@ QString TemplateInstance::expandCode() const
 {
     TemplateEntry *templateEntry = TypeDatabase::instance()->findTemplate(m_name);
     if (templateEntry) {
-        QString res = templateEntry->code();
-        foreach (const QString &key, replaceRules.keys())
-            res.replace(key, replaceRules[key]);
-
-        return QLatin1String("// TEMPLATE - ") + m_name + QLatin1String(" - START")
-            + res + QLatin1String("// TEMPLATE - ") + m_name + QLatin1String(" - END");
+        typedef QHash<QString, QString>::const_iterator ConstIt;
+        QString code = templateEntry->code();
+        for (ConstIt it = replaceRules.begin(), end = replaceRules.end(); it != end; ++it)
+            code.replace(it.key(), it.value());
+        while (!code.isEmpty() && code.at(code.size() - 1).isSpace())
+            code.chop(1);
+        QString result = QLatin1String("// TEMPLATE - ") + m_name + QLatin1String(" - START");
+        if (!code.startsWith(QLatin1Char('\n')))
+            result += QLatin1Char('\n');
+        result += code;
+        result += QLatin1String("\n// TEMPLATE - ") + m_name + QLatin1String(" - END");
+        return result;
     } else {
         qCWarning(lcShiboken).noquote().nospace()
             << "insert-template referring to non-existing template '" << m_name << '\'';
@@ -2232,6 +2238,43 @@ AddedFunction::AddedFunction(QString signature, QString returnType, double vr) :
     }
 }
 
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug d, const AddedFunction::TypeInfo &ti)
+{
+    QDebugStateSaver saver(d);
+    d.noquote();
+    d.nospace();
+    d << "TypeInfo(";
+    if (ti.isConstant)
+        d << "const";
+    if (ti.indirections)
+        d << QByteArray(ti.indirections, '*');
+    if (ti.isReference)
+        d << " &";
+    d << ti.name;
+    if (!ti.defaultValue.isEmpty())
+        d << " = " << ti.defaultValue;
+    d << ')';
+    return d;
+}
+
+QDebug operator<<(QDebug d, const AddedFunction &af)
+{
+    QDebugStateSaver saver(d);
+    d.noquote();
+    d.nospace();
+    d << "AddedFunction(";
+    if (af.access() == AddedFunction::Protected)
+        d << "protected";
+    if (af.isStatic())
+        d << " static";
+    d << af.returnType() << ' ' << af.name() << '(' << af.arguments() << ')';
+    if (af.isConstant())
+        d << " const";
+    return d;
+}
+#endif // !QT_NO_DEBUG_STREAM
+
 AddedFunction::TypeInfo AddedFunction::TypeInfo::fromSignature(const QString& signature)
 {
     return parseType(signature);
@@ -2317,8 +2360,9 @@ bool TypeEntry::isCppPrimitive() const
     if (!isPrimitive())
         return false;
 
-    PrimitiveTypeEntry* aliasedType = ((PrimitiveTypeEntry*)this)->basicAliasedTypeEntry();
-    QByteArray typeName = (aliasedType ? aliasedType->name() : m_name).toUtf8();
+    const PrimitiveTypeEntry *referencedType =
+        static_cast<const PrimitiveTypeEntry *>(this)->basicReferencedTypeEntry();
+    QByteArray typeName = (referencedType ? referencedType->name() : m_name).toUtf8();
 
     if (typeName.contains(' ') || m_type == VoidType)
         return true;

@@ -31,6 +31,7 @@
 #include "abstractmetalang.h"
 #include "reporthandler.h"
 #include "typedatabase.h"
+#include "typesystem.h"
 
 #ifndef QT_NO_DEBUG_STREAM
 #  include <QtCore/QMetaEnum>
@@ -105,6 +106,24 @@ AbstractMetaType::~AbstractMetaType()
 {
     qDeleteAll(m_children);
     m_instantiations.clear();
+}
+
+QString AbstractMetaType::package() const
+{
+    return m_typeEntry->targetLangPackage();
+}
+
+QString AbstractMetaType::name() const
+{
+    if (m_name.isNull())
+        // avoid constLast to stay Qt 5.5 compatible
+        m_name = m_typeEntry->targetLangName().split(QLatin1String("::")).last();
+    return m_name;
+}
+
+QString AbstractMetaType::fullName() const
+{
+    return m_typeEntry->qualifiedTargetLangName();
 }
 
 AbstractMetaType *AbstractMetaType::copy() const
@@ -298,7 +317,7 @@ QDebug operator<<(QDebug d, const AbstractMetaArgument *aa)
     d.nospace();
     d << "AbstractMetaArgument(";
     if (aa)
-        aa->toString();
+        d << aa->toString();
     else
         d << '0';
     d << ')';
@@ -521,14 +540,21 @@ QString AbstractMetaFunction::signature() const
         m_cachedSignature += QLatin1Char('(');
 
         for (int i = 0; i < m_arguments.count(); ++i) {
-            if (i > 0)
-                m_cachedSignature += QLatin1String(", ");
             AbstractMetaArgument *a = m_arguments.at(i);
-            m_cachedSignature += a->type()->cppSignature();
-
-            // We need to have the argument names in the qdoc files
-            m_cachedSignature += QLatin1Char(' ');
-            m_cachedSignature += a->name();
+            AbstractMetaType *t = a->type();
+            if (t) {
+                if (i > 0)
+                    m_cachedSignature += QLatin1String(", ");
+                m_cachedSignature += t->cppSignature();
+                // We need to have the argument names in the qdoc files
+                m_cachedSignature += QLatin1Char(' ');
+                m_cachedSignature += a->name();
+            } else {
+                qCWarning(lcShiboken).noquote().nospace()
+                    << QString::fromLatin1("No abstract meta type found for argument '%1' while"
+                                           "constructing signature for function '%2'.")
+                                           .arg(a->name(), name());
+            }
         }
         m_cachedSignature += QLatin1Char(')');
 
@@ -842,11 +868,16 @@ QString AbstractMetaFunction::minimalSignature() const
 
     for (int i = 0; i < arguments.count(); ++i) {
         AbstractMetaType *t = arguments.at(i)->type();
-
-        if (i > 0)
-            minimalSignature += QLatin1Char(',');
-
-        minimalSignature += t->minimalSignature();
+        if (t) {
+            if (i > 0)
+                minimalSignature += QLatin1Char(',');
+            minimalSignature += t->minimalSignature();
+        } else {
+            qCWarning(lcShiboken).noquote().nospace()
+                << QString::fromLatin1("No abstract meta type found for argument '%1' while constructing"
+                                       " minimal signature for function '%2'.")
+                                       .arg(arguments.at(i)->name(), name());
+        }
     }
     minimalSignature += QLatin1Char(')');
     if (isConstant())
@@ -906,14 +937,14 @@ bool AbstractMetaFunction::hasInjectedCode() const
     return false;
 }
 
-CodeSnipList AbstractMetaFunction::injectedCodeSnips(CodeSnip::Position position, TypeSystem::Language language) const
+CodeSnipList AbstractMetaFunction::injectedCodeSnips(TypeSystem::CodeSnipPosition position, TypeSystem::Language language) const
 {
     CodeSnipList result;
     foreach (const FunctionModification &mod, modifications(ownerClass())) {
         if (mod.isCodeInjection()) {
             QList<CodeSnip>::const_iterator it = mod.snips.constBegin();
             for (;it != mod.snips.constEnd(); ++it) {
-                if ((it->language & language) && (it->position == position || position == CodeSnip::Any))
+                if ((it->language & language) && (it->position == position || position == TypeSystem::CodeSnipPositionAny))
                     result << *it;
             }
         }
@@ -1153,9 +1184,40 @@ bool function_sorter(AbstractMetaFunction *a, AbstractMetaFunction *b)
 }
 
 #ifndef QT_NO_DEBUG_STREAM
-static inline void formatMetaFunction(QDebug &d, const AbstractMetaFunction *af)
+static inline void formatMetaFunctionBrief(QDebug &d, const AbstractMetaFunction *af)
 {
     d << '"' << af->minimalSignature() << '"';
+}
+
+void AbstractMetaFunction::formatDebugVerbose(QDebug &d) const
+{
+    d << m_functionType << ' ' << m_type << ' ' << m_name << '(';
+    for (int i = 0, count = m_arguments.size(); i < count; ++i) {
+        if (i)
+            d << ", ";
+        d <<  m_arguments.at(i);
+    }
+    d << "), signature=\"" << minimalSignature() << '"';
+    if (m_constant)
+        d << " [const]";
+    if (m_invalid)
+        d << " [invalid]";
+    if (m_reverse)
+        d << " [reverse]";
+    if (m_userAdded)
+        d << " [userAdded]";
+    if (m_explicit)
+        d << " [explicit]";
+    if (m_pointerOperator)
+        d << " [operator->]";
+    if (m_isCallOperator)
+        d << " [operator()]";
+    if (m_class)
+        d << " class: " << m_class->name();
+    if (m_implementingClass)
+        d << " implementing class: " << m_implementingClass->name();
+    if (m_declaringClass)
+        d << " declaring class: " << m_declaringClass->name();
 }
 
 QDebug operator<<(QDebug d, const AbstractMetaFunction *af)
@@ -1165,8 +1227,16 @@ QDebug operator<<(QDebug d, const AbstractMetaFunction *af)
     d.nospace();
     d << "AbstractMetaFunction(";
     if (af) {
-        d << "signature=";
-        formatMetaFunction(d, af);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+        if (d.verbosity() > 2) {
+            af->formatDebugVerbose(d);
+        } else {
+#endif
+            d << "signature=";
+            formatMetaFunctionBrief(d, af);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+        }
+#endif
     } else {
         d << '0';
     }
@@ -1597,6 +1667,31 @@ void AbstractMetaClass::setBaseClass(AbstractMetaClass *baseClass)
     m_baseClass = baseClass;
     if (baseClass)
         m_isPolymorphic |= baseClass->isPolymorphic();
+}
+
+QString AbstractMetaClass::package() const
+{
+    return m_typeEntry->targetLangPackage();
+}
+
+bool AbstractMetaClass::isInterface() const
+{
+    return m_typeEntry->isInterface();
+}
+
+bool AbstractMetaClass::isNamespace() const
+{
+    return m_typeEntry->isNamespace();
+}
+
+bool AbstractMetaClass::isQObject() const
+{
+    return m_typeEntry->isQObject();
+}
+
+QString AbstractMetaClass::qualifiedCppName() const
+{
+    return m_typeEntry->qualifiedCppName();
 }
 
 bool AbstractMetaClass::hasFunction(const QString &str) const
@@ -2514,6 +2609,16 @@ bool AbstractMetaType::hasNativeId() const
     return (isQObject() || isValue() || isObject()) && typeEntry()->isNativeIdBased();
 }
 
+bool AbstractMetaType::isTargetLangEnum() const
+{
+    return isEnum() && !static_cast<const EnumTypeEntry *>(typeEntry())->forceInteger();
+}
+
+bool AbstractMetaType::isTargetLangFlags() const
+{
+    return isFlags() && !static_cast<const FlagsTypeEntry *>(typeEntry())->forceInteger();
+}
+
 
 /*******************************************************************************
  * Other stuff...
@@ -2642,7 +2747,12 @@ QDebug operator<<(QDebug d, const AbstractMetaClass *ac)
             for (int i = 0; i < count; ++i) {
                 if (i)
                     d << ", ";
-                formatMetaFunction(d, functions.at(i));
+#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+                if (d.verbosity() > 2)
+                    d << functions.at(i);
+                else
+#endif
+                    formatMetaFunctionBrief(d, functions.at(i));
             }
             d << ')';
         }
@@ -2664,3 +2774,23 @@ QDebug operator<<(QDebug d, const AbstractMetaClass *ac)
     return d;
 }
 #endif // !QT_NO_DEBUG_STREAM
+
+QString AbstractMetaEnum::name() const
+{
+    return m_typeEntry->targetLangName();
+}
+
+QString AbstractMetaEnum::qualifier() const
+{
+    return m_typeEntry->targetLangQualifier();
+}
+
+QString AbstractMetaEnum::package() const
+{
+    return m_typeEntry->targetLangPackage();
+}
+
+bool AbstractMetaEnum::isAnonymous() const
+{
+    return m_typeEntry->isAnonymous();
+}

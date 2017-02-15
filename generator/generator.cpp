@@ -27,9 +27,11 @@
 ****************************************************************************/
 
 #include "generator.h"
+#include "abstractmetalang.h"
 #include "reporthandler.h"
 #include "fileout.h"
 #include "apiextractor.h"
+#include "typesystem.h"
 
 #include <QtCore/QDir>
 #include <QtCore/QFile>
@@ -109,8 +111,8 @@ void Generator::addInstantiatedContainers(const AbstractMetaType *type, const QS
         return;
     if (type->hasTemplateChildren()) {
         QString warning =
-                QStringLiteral("Skipping instantiation of container '%1' because it has template"
-                               " arguments.").arg(type->originalTypeDescription());
+                QString::fromLatin1("Skipping instantiation of container '%1' because it has template"
+                                    " arguments.").arg(type->originalTypeDescription());
         if (!context.isEmpty())
             warning.append(QStringLiteral(" Calling context: %1").arg(context));
 
