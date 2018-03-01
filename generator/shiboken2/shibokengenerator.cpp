@@ -1608,6 +1608,78 @@ ShibokenGenerator::ArgumentVarReplacementList ShibokenGenerator::getArgumentRepl
     return argReplacements;
 }
 
+void ShibokenGenerator::writeAddedProperties(QTextStream& s,
+                                       const AddedPropertyList props,
+                                       const AbstractMetaClass* context)
+{
+#define OUTPUT s << INDENT
+   const QString pyTypeName = cpythonTypeName(context);
+   foreach(AddedProperty prop, props) {
+      const bool writable = prop.access() == AddedProperty::ReadWrite;
+      OUTPUT << "{" << QString("// Property '%1'").arg(prop.name()) << endl;
+      {
+         Indentation indentation(INDENT);
+         OUTPUT << QString("if(!PyObject_HasAttrString((PyObject*)&%1, \"%2\"))")
+            .arg(pyTypeName, prop.name()) << endl;
+         OUTPUT << "{" << endl;
+         {
+            Indentation indentation(INDENT);
+            OUTPUT << QString("static const char * errorString = "
+               "\"Cannot initialize '%1' property of '%2' class\";")
+               .arg(prop.name(), context->qualifiedCppName()) << endl;
+            OUTPUT << QString("PyObject* getterPtr = PyObject_GetAttrString((PyObject*)&%1,").arg(pyTypeName) << endl
+                   << INDENT << QString("const_cast<char*>(\"%1\"));").arg(prop.getter()) << endl;
+            OUTPUT << "if (!getterPtr) {" << endl;
+            {
+               Indentation indentation(INDENT);
+               OUTPUT << "PyErr_Print();" << endl;
+               OUTPUT << "Py_FatalError( errorString );" << endl;
+            }
+            OUTPUT << "}" << endl;
+            if (writable) {
+               OUTPUT << QString("PyObject * setterPtr = PyObject_GetAttrString((PyObject*)&%1,").arg(pyTypeName) << endl
+                      << INDENT << QString("const_cast<char*>(\"%1\"));").arg(prop.setter()) << endl;
+               OUTPUT << "if (!setterPtr) {" << endl;
+               {
+                  Indentation indentation(INDENT);
+                  OUTPUT << "PyErr_Print();" << endl;
+                  OUTPUT << "Py_FatalError( errorString );" << endl;
+               }
+               OUTPUT << "}" << endl;
+            }
+            OUTPUT << "PyObject * propObject = PyObject_CallFunction((PyObject*)&PyProperty_Type," << endl;
+            if(writable) {
+               OUTPUT << "const_cast<char*>(\"OOs\"), getterPtr, setterPtr";
+            }
+            else {
+               OUTPUT << "const_cast<char*>(\"Oss\"), getterPtr, 0";
+            }
+            s << ", 0);" << endl;
+
+            OUTPUT << "if (!propObject) {" << endl;
+            {
+               Indentation indentation(INDENT);
+               OUTPUT << "PyErr_Print();" << endl;
+               OUTPUT << "Py_FatalError(errorString);" << endl;
+            }
+            OUTPUT << "}" << endl;
+            OUTPUT << QString("PyObject_SetAttrString((PyObject*)&%1, ").arg(pyTypeName)
+                   << QString("\"%1\", propObject);").arg(prop.name()) << endl;
+            if(prop.removeFuncs()) {
+               OUTPUT << QString("PyObject_DelAttrString((PyObject*)&%1, \"%2\");")
+                  .arg(pyTypeName, prop.getter()) << endl;
+               if(writable) {
+                  OUTPUT << QString("PyObject_DelAttrString((PyObject*)&%1, \"%2\");")
+                  .arg(pyTypeName, prop.setter()) << endl;
+               }
+            }
+         }
+         OUTPUT << "}" << endl;
+      }
+      OUTPUT << "}" << endl;
+   }
+}
+
 void ShibokenGenerator::writeCodeSnips(QTextStream& s,
                                        const CodeSnipList& codeSnips,
                                        TypeSystem::CodeSnipPosition position,
@@ -2522,6 +2594,14 @@ QString ShibokenGenerator::cppApiVariableName(const QString& moduleName) const
     result.replace(QLatin1Char('.'), QLatin1Char('_'));
     result.prepend(QLatin1String("Sbk"));
     result.append(QLatin1String("Types"));
+    return result;
+}
+
+QString ShibokenGenerator::internalNamespaceName(const QString& moduleName) const
+{
+    QString result = moduleName.isEmpty() ? ShibokenGenerator::packageName() : moduleName;
+    result.replace(".", "_");
+    result.append("_details");
     return result;
 }
 

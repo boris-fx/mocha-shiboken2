@@ -337,8 +337,6 @@ bool HeaderGenerator::finishGeneration()
     QString protectedEnumSurrogates;
     QTextStream protEnumsSurrogates(&protectedEnumSurrogates);
 
-    Indentation indent(INDENT);
-
     macrosStream << "// Type indices" << endl;
     AbstractMetaEnumList globalEnums = this->globalEnums();
     foreach (const AbstractMetaClass* metaClass, classes()) {
@@ -370,10 +368,19 @@ bool HeaderGenerator::finishGeneration()
     macrosStream << QLatin1String("SBK_") + moduleName() + QLatin1String("_IDX_COUNT");
     macrosStream.setFieldWidth(0);
     macrosStream << ' ' << getMaxTypeIndex() + smartPointerCount << endl << endl;
-    macrosStream << "// This variable stores all Python types exported by this module." << endl;
-    macrosStream << "extern PyTypeObject** " << cppApiVariableName() << ';' << endl << endl;
-    macrosStream << "// This variable stores all type converters exported by this module." << endl;
-    macrosStream << "extern SbkConverter** " << convertersVariableName() << ';' << endl << endl;
+    macrosStream << "namespace MODULE_NAMESPACE" << endl;
+    macrosStream << "{" << endl;
+    {
+        Indentation indentation(INDENT);
+        macrosStream << INDENT << "// This variable stores all Python types exported by this module." << endl;
+        macrosStream << INDENT << "extern PyTypeObject** " << cppApiVariableName() << ';' << endl << endl;
+        macrosStream << INDENT << "// This variable stores all type converters exported by this module." << endl;
+        macrosStream << INDENT << "extern SbkConverter** " << convertersVariableName() << ';' << endl << endl;
+    }
+    macrosStream << "}" << endl;
+
+    macrosStream << "using MODULE_NAMESPACE::" << cppApiVariableName() << ';' << endl;
+    macrosStream << "using MODULE_NAMESPACE::" << convertersVariableName() << ';' << endl;
 
     // TODO-CONVERTER ------------------------------------------------------------------------------
     // Using a counter would not do, a fix must be made to APIExtractor's getTypeIndex().
@@ -464,6 +471,19 @@ bool HeaderGenerator::finishGeneration()
         s << "//workaround to access protected functions" << endl;
         s << "#define protected public" << endl << endl;
     }
+    s << "#include <exception>" << endl;
+    s << "#ifndef STD_EXCEPTION_TRANSLATOR" << endl;
+    s << "#define STD_EXCEPTION_TRANSLATOR" << endl;
+    s << "typedef void ( *stdExceptionTranslator )( const std::exception& );" << endl;
+    s << "namespace " << internalNamespaceName() << endl;
+    s << "{" << endl;
+    {
+        Indentation indentation(INDENT);
+        s << INDENT << "extern stdExceptionTranslator setPythonError;" << endl;
+    }
+    s << "}" << endl;
+    s << "using " << internalNamespaceName() << "::setPythonError;" << endl;
+    s << "#endif // STD_EXCEPTION_TRANSLATOR" << endl;
 
     s << "#include <sbkpython.h>" << endl;
     s << "#include <sbkconverter.h>" << endl;
@@ -475,10 +495,19 @@ bool HeaderGenerator::finishGeneration()
         s << "#include <pysidesignal.h>" << endl;
 
     QStringList requiredTargetImports = TypeDatabase::instance()->requiredTargetImports();
+
     if (!requiredTargetImports.isEmpty()) {
+        s << "#if !defined(MODULE_NAMESPACE)" << endl;
+        {
+            Indentation indentation(INDENT);
+            s << "#" << INDENT << "define MODULE_NAMESPACE " << internalNamespaceName() << endl;
+        }
+        s << "#endif  // !defined(MODULE_NAMESPACE)" << endl;
+        s << endl;
         s << "// Module Includes" << endl;
-        foreach (const QString& requiredModule, requiredTargetImports)
+        foreach (const QString& requiredModule, requiredTargetImports) {
             s << "#include <" << getModuleHeaderFileName(requiredModule) << ">" << endl;
+        }
         s << endl;
     }
 

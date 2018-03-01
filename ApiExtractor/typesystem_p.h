@@ -82,6 +82,7 @@ class StackElement
             NativeToTarget              = 0x1100,
             TargetToNative              = 0x1200,
             AddConversion               = 0x1300,
+            AddProperty                 = 0x1400,
             SimpleMask                  = 0x3f00,
 
             // Code snip tags (0x1000, 0x2000, ... , 0xf000)
@@ -130,6 +131,7 @@ struct StackElementContext
     FunctionModificationList functionMods;
     FieldModificationList fieldMods;
     DocModificationList docModifications;
+    AddedPropertyList addedProperties;
 };
 
 class Handler

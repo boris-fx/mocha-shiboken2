@@ -50,10 +50,13 @@ static bool shouldSkip(const AbstractMetaFunction* func)
                      || func->isModifiedRemoved()
                      || func->declaringClass() != func->ownerClass()
                      || func->isCastOperator()
-                     || func->name() == QLatin1String("operator=");
+                     || func->name() == QLatin1String("operator=")
+                     || func->isModifiedSkipForDoc()
+                     || func->isPrivate()
+                     || func->isProtected();
 
     // Search a const clone
-    if (!skipable && !func->isConstant()) {
+    if (!skipable && !func->isConstant() && func->ownerClass()) {
         const AbstractMetaArgumentList funcArgs = func->arguments();
         foreach (AbstractMetaFunction* f, func->ownerClass()->functions()) {
             if (f != func
@@ -85,11 +88,7 @@ static bool functionSort(const AbstractMetaFunction* func1, const AbstractMetaFu
 
 static QString createRepeatedChar(int i, char c)
 {
-    QString out;
-    for (int j = 0; j < i; ++j)
-        out += QLatin1Char(c);
-
-    return out;
+   return QString(i, c);
 }
 
 static QString escape(QString str)
@@ -1012,14 +1011,14 @@ void QtDocGenerator::writeFormatedText(QTextStream& s, const Documentation& doc,
     QString metaClassName;
 
     if (metaClass)
-        metaClassName = getClassTargetFullName(metaClass);
+        metaClassName = getClassTargetFullName(metaClass, false);
 
     if (doc.format() == Documentation::Native) {
         QtXmlToSphinx x(this, doc.value(), metaClassName);
         s << x;
     } else {
         QStringList lines = doc.value().split(QLatin1Char('\n'));
-        QRegExp regex(QLatin1String("\\S")); // non-space character
+        static QRegExp regex(QLatin1String("\\S")); // non-space character
         int typesystemIndentation = std::numeric_limits<int>().max();
         // check how many spaces must be removed from the begining of each line
         foreach (QString line, lines) {
@@ -1079,6 +1078,7 @@ void QtDocGenerator::generateClass(QTextStream &s, GeneratorContext &classContex
         s << ".. note:: This class was introduced in Qt " << metaClass->typeEntry()->version() << endl;
 
     writeFunctionList(s, metaClass);
+    writePropertyList(s, metaClass);
 
     //Function list
     AbstractMetaFunctionList functionList = metaClass->functions();
@@ -1110,6 +1110,11 @@ void QtDocGenerator::generateClass(QTextStream &s, GeneratorContext &classContex
         writeFunction(s, true, metaClass, func);
     }
 
+    foreach (const AddedProperty& prop, metaClass->typeEntry()->addedProperties()) {
+       s << ".. attribute:: ";
+       writeProperty(s, metaClass, prop);
+    }
+
     writeInjectDocumentation(s, TypeSystem::DocModificationAppend, metaClass, 0);
 }
 
@@ -1127,7 +1132,7 @@ void QtDocGenerator::writeFunctionList(QTextStream& s, const AbstractMetaClass* 
 
         QString className;
         if (!func->isConstructor())
-            className =  getClassTargetFullName(cppClass) + QLatin1Char('.');
+            className =  getClassTargetFullName(cppClass, false) + QLatin1Char('.');
         else if (func->implementingClass() && func->implementingClass()->enclosingClass())
             className =  getClassTargetFullName(func->implementingClass()->enclosingClass()) + QLatin1Char('.');
         QString funcName = getFuncName(func);
@@ -1140,7 +1145,7 @@ void QtDocGenerator::writeFunctionList(QTextStream& s, const AbstractMetaClass* 
             str += className;
         str += funcName;
         str += QLatin1String(">` (");
-        str += parseArgDocStyle(cppClass, func);
+        str += parseArgDocStyle(func);
         str += QLatin1Char(')');
 
         if (func->isStatic())
@@ -1170,6 +1175,50 @@ void QtDocGenerator::writeFunctionList(QTextStream& s, const AbstractMetaClass* 
     }
 }
 
+void QtDocGenerator::writePropertyList(QTextStream& s, const AbstractMetaClass* cppClass)
+{
+   AddedPropertyList props = cppClass->typeEntry()->addedProperties();
+   if(props.isEmpty()) {
+      return;
+   }
+   {
+      QtXmlToSphinx::Table propertyTable;
+      QtXmlToSphinx::TableRow row;
+
+      QStringList propList;
+
+      foreach(const AddedProperty & prop, props) {
+         QString propStr = QString("property :attr:`%1<%2>` [%3] of ")
+               .arg(prop.name())
+               .arg(QString("%1.%2")
+                    .arg(cppClass->qualifiedCppName())
+                    .arg(prop.name()))
+               .arg(prop.access() == AddedProperty::ReadWrite ? "read-write" : "read-only");
+         QString scalarType = prop.scalarType(),
+                 classType  = prop.classType();
+         if (!scalarType.isEmpty()) {
+            propStr += scalarType;
+         } else if (!classType.isEmpty()) {
+            propStr += QString(":class:`%1`").arg(classType);
+         } else {
+            propStr += "unknown type";
+         }
+         propList << propStr;
+      }
+      qSort(propList);
+      s << "Properties" << endl
+        << "^^^^^^^^^^" << endl;
+      s << ".. container:: property_list" << endl << endl;
+      {
+         Indentation indentation(INDENT);
+         foreach(const QString & prop, propList) {
+            s << "*" << INDENT << prop << endl;
+         }
+         s << endl << endl;
+      }
+   }
+}
+
 void QtDocGenerator::writeFunctionBlock(QTextStream& s, const QString& title, QStringList& functions)
 {
     if (functions.size() > 0) {
@@ -1192,7 +1241,7 @@ void QtDocGenerator::writeEnums(QTextStream& s, const AbstractMetaClass* cppClas
     static const QString section_title = QLatin1String(".. attribute:: ");
 
     foreach (AbstractMetaEnum* en, cppClass->enums()) {
-        s << section_title << getClassTargetFullName(cppClass) << '.' << en->name() << endl << endl;
+        s << section_title << getClassTargetFullName(cppClass, false) << '.' << en->name() << endl << endl;
         writeFormatedText(s, en->documentation(), cppClass);
 
         if (en->typeEntry() && (en->typeEntry()->version() != 0))
@@ -1206,7 +1255,7 @@ void QtDocGenerator::writeFields(QTextStream& s, const AbstractMetaClass* cppCla
     static const QString section_title = QLatin1String(".. attribute:: ");
 
     foreach (AbstractMetaField* field, cppClass->fields()) {
-        s << section_title << getClassTargetFullName(cppClass) << "." << field->name() << endl << endl;
+        s << section_title << getClassTargetFullName(cppClass, false) << "." << field->name() << endl << endl;
         //TODO: request for member ‘documentation’ is ambiguous
         writeFormatedText(s, field->AbstractMetaAttributes::documentation(), cppClass);
     }
@@ -1219,20 +1268,15 @@ void QtDocGenerator::writeConstructors(QTextStream& s, const AbstractMetaClass* 
 
     AbstractMetaFunctionList lst = cppClass->queryFunctions(AbstractMetaClass::Constructors | AbstractMetaClass::Visible);
 
-    bool first = true;
     QHash<QString, AbstractMetaArgument*> arg_map;
+
 
     foreach(AbstractMetaFunction* func, lst) {
         if (func->isModifiedRemoved())
             continue;
 
-        if (first) {
-            first = false;
-            s << sectionTitle;
-        } else {
-            s << sectionTitleSpace;
-        }
-        writeFunction(s, false, cppClass, func);
+        s << sectionTitle;
+        writeFunction(s, true, cppClass, func);
         foreach(AbstractMetaArgument* arg, func->arguments())
         {
             if (!arg_map.contains(arg->name())) {
@@ -1255,7 +1299,7 @@ void QtDocGenerator::writeConstructors(QTextStream& s, const AbstractMetaClass* 
     }
 }
 
-QString QtDocGenerator::parseArgDocStyle(const AbstractMetaClass* cppClass, const AbstractMetaFunction* func)
+QString QtDocGenerator::parseArgDocStyle(const AbstractMetaFunction* func)
 {
     QString ret;
     int optArgs = 0;
@@ -1409,15 +1453,15 @@ void QtDocGenerator::writeFunctionSignature(QTextStream& s, const AbstractMetaCl
 {
     QString className;
     if (!func->isConstructor())
-        className =  getClassTargetFullName(cppClass) + QLatin1Char('.');
+        className =  getClassTargetFullName(cppClass, false) + QLatin1Char('.');
     else if (func->implementingClass() && func->implementingClass()->enclosingClass())
-        className =  getClassTargetFullName(func->implementingClass()->enclosingClass()) + QLatin1Char('.');
+        className =  getClassTargetFullName(func->implementingClass()->enclosingClass(), false) + QLatin1Char('.');
 
     QString funcName = getFuncName(func);
     if (!funcName.startsWith(className))
         funcName = className + funcName;
 
-    s << funcName << "(" << parseArgDocStyle(cppClass, func) << ")";
+    s << funcName << "(" << parseArgDocStyle(func) << ")";
 }
 
 QString QtDocGenerator::translateToPythonType(const AbstractMetaType* type, const AbstractMetaClass* cppClass)
@@ -1436,11 +1480,14 @@ QString QtDocGenerator::translateToPythonType(const AbstractMetaType* type, cons
     } else if (type->name().startsWith(QLatin1String("unsigned "))) { // uint and ulong
         strType = QLatin1String("long");
     } else if (type->isContainer()) {
-        QString strType = translateType(type, cppClass, Options(ExcludeConst) | ExcludeReference);
+        strType = translateType(type, cppClass, Options(ExcludeConst) | ExcludeReference);
+        strType.replace(QLatin1String(" "), QLatin1String(""));
         strType.remove(QLatin1Char('*'));
         strType.remove(QLatin1Char('>'));
         strType.remove(QLatin1Char('<'));
         strType.replace(QLatin1String("::"), QLatin1String("."));
+        if (strType.startsWith(QLatin1String(".")))
+             strType.remove(0, 1);
         if (strType.contains(QLatin1String("QList")) || strType.contains(QLatin1String("QVector"))) {
             strType.replace(QLatin1String("QList"), QLatin1String("list of "));
             strType.replace(QLatin1String("QVector"), QLatin1String("list of "));
@@ -1450,6 +1497,10 @@ QString QtDocGenerator::translateToPythonType(const AbstractMetaType* type, cons
             QStringList types = strType.split(QLatin1Char(','));
             strType = QString::fromLatin1("Dictionary with keys of type %1 and values of type %2.")
                                          .arg(types[0], types[1]);
+        } else if (strType.contains(QLatin1String("QPair"))) {
+           strType.remove(QLatin1String("QPair"));
+           QStringList types = strType.split(QLatin1Char(','));
+           strType = QString::fromLatin1("2-items container of {%1, %2}").arg(types[0]).arg(types[1]);
         }
     } else {
         QString refTag;
@@ -1464,8 +1515,8 @@ QString QtDocGenerator::translateToPythonType(const AbstractMetaType* type, cons
 
 void QtDocGenerator::writeParamerteType(QTextStream& s, const AbstractMetaClass* cppClass, const AbstractMetaArgument* arg)
 {
-    s << INDENT << ":param " << arg->name() << ": "
-      << translateToPythonType(arg->type(), cppClass) << endl;
+    s << INDENT << ":type " << arg->name() << ": "
+          << translateToPythonType(arg->type(), cppClass) << endl;
 }
 
 void QtDocGenerator::writeFunctionParametersType(QTextStream& s, const AbstractMetaClass* cppClass, const AbstractMetaFunction* func)
@@ -1518,6 +1569,82 @@ void QtDocGenerator::writeFunction(QTextStream& s, bool writeDoc, const Abstract
             writeFormatedText(s, func->documentation(), cppClass);
         writeInjectDocumentation(s, TypeSystem::DocModificationAppend, cppClass, func);
     }
+}
+
+namespace {
+   class FormatedTextWriter : public std::binary_function<Documentation, QtDocGenerator*, void> {
+   public:
+      FormatedTextWriter(QTextStream& s, const AbstractMetaClass* cppClass)
+         : m_s(s), m_cppClass(cppClass) { }
+
+      void operator()(Documentation doc, QtDocGenerator* generator) const {
+         generator->writeFormatedText(m_s, doc, m_cppClass);
+      }
+   private:
+      QTextStream& m_s;
+      const AbstractMetaClass* m_cppClass;
+   };
+}
+
+void QtDocGenerator::writeProperty(QTextStream& s, const AbstractMetaClass* cppClass, const AddedProperty& prop)
+{
+   s << QString("%1.%2")
+        .arg(cppClass->qualifiedCppName())
+        .arg(prop.name()) << endl << endl << endl;
+   {
+      Indentation indentation(INDENT);
+      s << INDENT << ":type: ";
+      QString scalarType = prop.scalarType(),
+              classType  = prop.classType();
+      if (!scalarType.isEmpty()) {
+         s << scalarType;
+      } else if (!classType.isEmpty()) {
+         s << QString(":class:`%1.%2`").arg(cppClass->package()).arg(classType);
+      } else {
+         s << "unknown type";
+      }
+      s << endl;
+      s << INDENT << ":access: " << (prop.access() == AddedProperty::ReadWrite ? "read-write" : "read-only");
+      std::vector<Documentation> prependDocs, appendDocs, replaceDocs;
+      foreach (DocModification mod, cppClass->typeEntry()->docModifications()) {
+         // TODO: add property mark to property signature
+         if (mod.signature() != prop.name())
+            continue;
+         Documentation doc;
+         Documentation::Format fmt;
+         if (mod.format == TypeSystem::NativeCode)
+            fmt = Documentation::Native;
+         else if (mod.format == TypeSystem::TargetLangCode)
+            fmt = Documentation::Target;
+         else
+            continue;
+         doc.setValue(mod.code(), fmt);
+         switch (mod.mode()) {
+            case DocModification::Append:
+               appendDocs.push_back(doc);
+               break;
+            case DocModification::Prepend:
+               prependDocs.push_back(doc);
+               break;
+            case DocModification::Replace:
+               replaceDocs.push_back(doc);
+               break;
+            default:
+               break;
+         }
+      }
+      if(replaceDocs.size()) {
+         std::for_each(replaceDocs.begin(), replaceDocs.end(),
+                       std::bind2nd(FormatedTextWriter(s, cppClass), this));
+      }
+      else {
+         std::for_each(appendDocs.begin(), appendDocs.end(),
+                       std::bind2nd(FormatedTextWriter(s, cppClass), this));
+         std::for_each(prependDocs.begin(), prependDocs.end(),
+                       std::bind2nd(FormatedTextWriter(s, cppClass), this));
+      }
+   }
+   s << endl << endl;
 }
 
 static void writeFancyToc(QTextStream& s, const QStringList& items, int cols = 4)
@@ -1600,6 +1727,45 @@ bool QtDocGenerator::finishGeneration()
         /* Avoid showing "Detailed Description for *every* class in toc tree */
         Indentation indentation(INDENT);
 
+        TypeEntry* typesystemEntry = TypeDatabase::instance()->findTypes(it.key())[0];
+        std::vector<Documentation> prependDocs, appendDocs, replaceDocs;
+        foreach (DocModification mod, typesystemEntry->docModifications()) {
+           if (!mod.signature().isEmpty())
+              continue;
+           Documentation doc;
+           Documentation::Format fmt;
+           if (mod.format == TypeSystem::NativeCode)
+              fmt = Documentation::Native;
+           else if (mod.format == TypeSystem::TargetLangCode)
+              fmt = Documentation::Target;
+           else
+              continue;
+           doc.setValue(mod.code(), fmt);
+           switch (mod.mode()) {
+              case DocModification::Append:
+                 appendDocs.push_back(doc);
+                 break;
+              case DocModification::Prepend:
+                 prependDocs.push_back(doc);
+                 break;
+              case DocModification::Replace:
+                 replaceDocs.push_back(doc);
+                 break;
+              default:
+                 break;
+           }
+        }
+        if(replaceDocs.size()) {
+           std::for_each(replaceDocs.begin(), replaceDocs.end(),
+                         std::bind2nd(FormatedTextWriter(s, NULL), this));
+        }
+        else {
+           std::for_each(appendDocs.begin(), appendDocs.end(),
+                         std::bind2nd(FormatedTextWriter(s, NULL), this));
+           std::for_each(prependDocs.begin(), prependDocs.end(),
+                         std::bind2nd(FormatedTextWriter(s, NULL), this));
+        }
+
         // Search for extra-sections
         if (!m_extraSectionDir.isEmpty()) {
             QDir extraSectionDir(m_extraSectionDir);
@@ -1620,21 +1786,78 @@ bool QtDocGenerator::finishGeneration()
             it.value().append(fileList);
         }
 
-        writeFancyToc(s, it.value());
+//        writeFancyToc(s, it.value());
+        //Writing global functions
+        AbstractMetaFunctionList globalFuncs = globalFunctions(); // FIXME: use package functions only
+        if (!globalFuncs.isEmpty())
+        {
+           FileOut foutput(outputDir + "/GlobalFunctions.rst");
+           QTextStream& fs = foutput.stream;
+           // Header
+           fs << ".. module:: " << it.key() << endl << endl;
+           fs << "Global functions" << endl <<
+                 "****************" << endl << endl;
+           fs << ".. container:: function_list" << endl << endl;
+           {
+              // Function list
+              foreach (AbstractMetaFunction* function, globalFuncs) {
+                 if (shouldSkip(function))
+                    continue;
+                 QString funcName = QString("%1.%2").arg(it.key()).arg(getFuncName(function));
+                 fs << "*" << INDENT << ":func:`" << funcName << "`" << endl;
+              }
+           }
+           fs << endl << endl;
 
-        s << INDENT << ".. container:: hide" << endl << endl;
+           // Detailed description
+           fs << "Detailed Description" << endl <<
+                 "--------------------" << endl << endl;
+           {
+              // Function details
+              foreach (AbstractMetaFunction* function, globalFuncs) {
+                 if (shouldSkip(function))
+                    continue;
+                 QString funcName = QString("%1.%2").arg(it.key()).arg(getFuncName(function));
+                 fs << ".. function:: " << funcName << "(" << parseArgDocStyle(function) << ")" << endl;
+                 writeFunctionParametersType(fs, NULL, function);
+                 fs << endl;
+                 foreach(DocModification mod, typesystemEntry->docModifications()) {
+                    if (mod.signature() == function->minimalSignature()) {
+                        Documentation doc;
+                        Documentation::Format fmt;
+
+                        if (mod.format == TypeSystem::NativeCode)
+                            fmt = Documentation::Native;
+                        else if (mod.format == TypeSystem::TargetLangCode)
+                            fmt = Documentation::Target;
+                        else
+                            continue;
+                        Indentation indentation(INDENT);
+
+                        doc.setValue(mod.code() , fmt);
+                        writeFormatedText(fs, doc, NULL);
+                    }
+                 }
+              }
+           }
+        }
+
+
+        s << INDENT << ".. container:: classes" << endl << endl;
         {
             Indentation indentation(INDENT);
             s << INDENT << ".. toctree::" << endl;
             Indentation deeperIndentation(INDENT);
             s << INDENT << ":maxdepth: 1" << endl << endl;
-            foreach (QString className, it.value())
+            if (!globalFuncs.isEmpty()) {
+               s << INDENT << "GlobalFunctions.rst" << endl;
+            }
+            QStringList classes = it.value();
+            qSort(classes);
+            foreach (QString className, classes)
                 s << INDENT << className << endl;
             s << endl << endl;
         }
-
-        s << "Detailed Description" << endl;
-        s << "--------------------" << endl << endl;
 
         // module doc is always wrong and C++istic, so go straight to the extra directory!
         QFile moduleDoc(m_extraSectionDir + QLatin1Char('/') + it.key() + QLatin1String(".rst"));

@@ -104,6 +104,7 @@ Handler::Handler(TypeDatabase* database, bool generate)
     tagNames.insert(QLatin1String("inject-documentation"), StackElement::InjectDocumentation);
     tagNames.insert(QLatin1String("modify-documentation"), StackElement::ModifyDocumentation);
     tagNames.insert(QLatin1String("add-function"), StackElement::AddFunction);
+    tagNames.insert(QLatin1String("add-property"), StackElement::AddProperty);
 }
 
 static QString msgReaderError(const QXmlStreamReader &reader, const QString &what)
@@ -213,6 +214,7 @@ bool Handler::endElement(const QStringRef &localName)
                 foreach (CustomConversion::TargetToNativeConversion* toNative, customConversion->targetToNativeConversions())
                     toNative->setSourceType(m_database->findType(toNative->sourceTypeName()));
             }
+           m_current->entry->setDocModification(m_contextStack.top()->docModifications);
         }
         break;
     case StackElement::ObjectTypeEntry:
@@ -225,6 +227,7 @@ bool Handler::endElement(const QStringRef &localName)
         centry->setFieldModifications(m_contextStack.top()->fieldMods);
         centry->setCodeSnips(m_contextStack.top()->codeSnips);
         centry->setDocModification(m_contextStack.top()->docModifications);
+        centry->setAddedProperties(m_contextStack.top()->addedProperties);
 
         if (centry->designatedInterface()) {
             centry->designatedInterface()->setCodeSnips(m_contextStack.top()->codeSnips);
@@ -263,8 +266,8 @@ bool Handler::endElement(const QStringRef &localName)
     }
     break;
     case StackElement::EnumTypeEntry:
-        m_current->entry->setDocModification(m_contextStack.top()->docModifications);
-        m_contextStack.top()->docModifications = DocModificationList();
+//        m_current->entry->setDocModification(m_contextStack.top()->docModifications);
+//        m_contextStack.top()->docModifications = DocModificationList();
         m_currentEnum = 0;
         break;
     case StackElement::Template:
@@ -377,9 +380,10 @@ bool Handler::characters(const String &ch)
         }
     }
 
-    if (m_current->type & StackElement::DocumentationMask)
+    if (m_current->type & StackElement::DocumentationMask) {
         m_contextStack.top()->docModifications.last().setCode(ch);
 
+    }
     return true;
 }
 
@@ -724,6 +728,8 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
                 return false;
             }
             QString rename = attributes[QLatin1String("rename")];
+            FunctionModification mod(since);
+            mod.signature = signature;
             if (!rename.isEmpty()) {
                 static QRegExp functionNameRegExp(QLatin1String("^[a-zA-Z_][a-zA-Z0-9_]*$"));
                 if (!functionNameRegExp.exactMatch(rename)) {
@@ -731,12 +737,10 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
                               + rename + QLatin1String("' is not a valid function name");
                     return false;
                 }
-                FunctionModification mod(since);
-                mod.signature = signature;
                 mod.renamedToName = attributes[QLatin1String("rename")];
                 mod.modifiers |= Modification::Rename;
-                m_contextStack.top()->functionMods << mod;
             }
+            m_contextStack.top()->functionMods << mod;
         }
 
         // We need to be able to have duplicate primitive type entries,
@@ -760,7 +764,7 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
         }
 
         // Fix type entry name using nesting information.
-        if (element->type & StackElement::TypeEntryMask
+        if ((element->type & StackElement::TypeEntryMask)
             && element->parent && element->parent->type != StackElement::Root) {
             name = element->parent->entry->name() + colonColon() + name;
         }
@@ -1016,7 +1020,7 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
             } else if (modeName == QLatin1String("replace")) {
                 mode = TypeSystem::DocModificationReplace;
             } else {
-                m_error = QLatin1String("Unknow documentation injection mode: ") + modeName;
+                m_error = QLatin1String("Unknown documentation injection mode: ") + modeName;
                 return false;
             }
 
@@ -1050,10 +1054,13 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
         fetchAttributeValues(tagName, atts, &attributes);
         double since = attributes[sinceAttribute()].toDouble();
 
-        const int validParent = StackElement::TypeEntryMask
+        static const int validParent = StackElement::TypeEntryMask
                                 | StackElement::ModifyFunction
-                                | StackElement::ModifyField;
-        if (m_current->parent && m_current->parent->type & validParent) {
+                                | StackElement::ModifyField
+                                | StackElement::AddProperty
+                                | StackElement::AddFunction;
+        if ((m_current->parent && (m_current->parent->type & validParent))
+              || m_current->type == StackElement::Root) {
             QString signature = (m_current->type & StackElement::TypeEntryMask) ? QString() : m_currentSignature;
             m_contextStack.top()->docModifications << DocModification(attributes[QLatin1String("xpath")], signature, since);
         } else {
@@ -1062,7 +1069,7 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
             return false;
         }
     } else if (element->type != StackElement::None) {
-        bool topLevel = element->type == StackElement::Root
+        static const bool topLevel = element->type == StackElement::Root
                         || element->type == StackElement::SuppressedWarning
                         || element->type == StackElement::Rejection
                         || element->type == StackElement::LoadTypesystem
@@ -1110,6 +1117,14 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
             attributes.insert(QLatin1String("access"), QLatin1String("public"));
             attributes.insert(QLatin1String("static"), QLatin1String("no"));
             break;
+        case StackElement::AddProperty:
+           attributes["name"] = QString();
+           attributes["getter"] = QString();
+           attributes["setter"] = QString();
+           attributes["remove-funcs"] = "yes";
+           attributes["scalar-type"] = QString();
+           attributes["class-type"] = QString();
+           break;
         case StackElement::ModifyFunction:
             attributes.insert(QLatin1String("signature"), QString());
             attributes.insert(QLatin1String("access"), QString());
@@ -1120,6 +1135,7 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
             attributes.insert(QLatin1String("virtual-slot"), QLatin1String("no"));
             attributes.insert(QLatin1String("thread"), QLatin1String("no"));
             attributes.insert(QLatin1String("allow-thread"), QLatin1String("no"));
+            attributes.insert(QLatin1String("skip-for-doc"), QString("no"));
             break;
         case StackElement::ModifyArgument:
             attributes.insert(QLatin1String("index"), QString());
@@ -1202,6 +1218,7 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
         case StackElement::ParentOwner:
             attributes.insert(QLatin1String("index"), QString());
             attributes.insert(QLatin1String("action"), QString());
+            break;
         default:
             { };
         };
@@ -1637,6 +1654,44 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
             m_contextStack.top()->functionMods << mod;
         }
         break;
+        case StackElement::AddProperty: {
+           if(!(topElement.type & (StackElement::ObjectTypeEntry | StackElement::ValueTypeEntry))) {
+              m_error = QString::fromLatin1("Add property requires a object type or value type as parent"
+                                            ", was=%1").arg(topElement.type, 0, 16);
+              return false;
+           }
+           QString name = attributes["name"];
+           if (name.isEmpty()) {
+              m_error = "No name for the added property";
+              return false;
+           }
+           QString getter = attributes["getter"];
+           if (getter.isEmpty()) {
+              m_error = "Property requires a getter at least";
+              return false;
+           }
+           QString setter = attributes["setter"];
+           AddedProperty prop(name, getter, setter);
+           prop.setRemoveFuncs(attributes["remove-funcs"] == "yes");
+
+           QString scalarType = attributes["scalar-type"],
+                   classType  = attributes["class-type"];
+
+           if (!scalarType.isEmpty() && !classType.isEmpty()) {
+              m_error = "type requires only one specified attribute (scalar-type or class-type)";
+              return false;
+           }
+
+           if (!scalarType.isEmpty()) {
+              prop.setScalarType(scalarType);
+           } else if (!classType.isEmpty()) {
+              prop.setClassType(classType);
+           }
+
+           m_contextStack.top()->addedProperties << prop;
+           m_currentSignature = name;
+        }
+        break;
         case StackElement::ModifyFunction: {
             if (!(topElement.type & StackElement::ComplexTypeEntryMask)) {
                 m_error = QString::fromLatin1("Modify function requires complex type as parent"
@@ -1698,6 +1753,7 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
             mod.setAllowThread(convertBoolean(attributes[QLatin1String("allow-thread")], QLatin1String("allow-thread"), false));
 
             mod.modifiers |= (convertBoolean(attributes[QLatin1String("virtual-slot")], QLatin1String("virtual-slot"), false) ? Modification::VirtualSlot : 0);
+            mod.modifiers |= (convertBoolean(attributes[QLatin1String("skip-for-doc")], QLatin1String("skip-for-doc"), false) ? Modification::SkippedForDoc : 0);
 
             m_contextStack.top()->functionMods << mod;
         }

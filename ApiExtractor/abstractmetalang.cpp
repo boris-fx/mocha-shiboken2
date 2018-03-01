@@ -359,6 +359,17 @@ bool AbstractMetaFunction::isModifiedRemoved(int types) const
     return false;
 }
 
+bool AbstractMetaFunction::isModifiedSkipForDoc() const
+{
+   FunctionModificationList mods = modifications(implementingClass());
+   foreach (FunctionModification mod, mods) {
+       if (mod.isSkippedForDoc())
+           return true;
+   }
+
+   return false;
+}
+
 bool AbstractMetaFunction::needsCallThrough() const
 {
     if (ownerClass()->isInterface())

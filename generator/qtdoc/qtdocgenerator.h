@@ -193,6 +193,8 @@ public:
         return m_codeSnippetDirs;
     }
 
+    void writeFormatedText(QTextStream& s, const Documentation& doc, const AbstractMetaClass* metaclass = 0);
+
 protected:
     QString fileNamePrefix() const;
     QString fileNameForContext(GeneratorContext &context) const;
@@ -201,6 +203,8 @@ protected:
 
     void writeFunctionArguments(QTextStream&, const AbstractMetaFunction*, Options) const {}
     void writeArgumentNames(QTextStream&, const AbstractMetaFunction*, Options) const {}
+
+    void writeGlobalFunctions();
 
 private:
     void writeEnums(QTextStream& s, const AbstractMetaClass* cppClass);
@@ -211,16 +215,16 @@ private:
     void writeFunction(QTextStream& s, bool writeDoc, const AbstractMetaClass* cppClass, const AbstractMetaFunction* func);
     void writeFunctionParametersType(QTextStream &s, const AbstractMetaClass *cppClass, const AbstractMetaFunction* func);
     void writeFunctionList(QTextStream& s, const AbstractMetaClass* cppClass);
+    void writePropertyList(QTextStream& s, const AbstractMetaClass* cppClass);
+    void writeProperty(QTextStream& s, const AbstractMetaClass* cppClass, const AddedProperty& prop);
     void writeFunctionBlock(QTextStream& s, const QString& title, QStringList& functions);
     void writeParamerteType(QTextStream &s, const AbstractMetaClass *cppClass, const AbstractMetaArgument *arg);
 
     void writeConstructors(QTextStream &s, const AbstractMetaClass *cppClass);
-    void writeFormatedText(QTextStream& s, const Documentation& doc, const AbstractMetaClass* metaclass = 0);
     bool writeInjectDocumentation(QTextStream& s, TypeSystem::DocModificationMode mode, const AbstractMetaClass* cppClass, const AbstractMetaFunction* func);
     void writeDocSnips(QTextStream &s, const CodeSnipList &codeSnips, TypeSystem::CodeSnipPosition position, TypeSystem::Language language);
 
-
-    QString parseArgDocStyle(const AbstractMetaClass *cppClass, const AbstractMetaFunction *func);
+    QString parseArgDocStyle(const AbstractMetaFunction *func);
     QString translateToPythonType(const AbstractMetaType *type, const AbstractMetaClass *cppClass);
 
     QString m_docDataDir;

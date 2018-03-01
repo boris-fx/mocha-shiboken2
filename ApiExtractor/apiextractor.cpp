@@ -239,7 +239,7 @@ bool ApiExtractor::run()
         std::cerr << "You must specify a Type System file." << std::endl;
         return false;
     } else if (!TypeDatabase::instance()->parseFile(m_typeSystemFileName)) {
-        std::cerr << "Cannot parse file: " << qPrintable(m_typeSystemFileName);
+        std::cerr << "Cannot parse file: " << qPrintable(m_typeSystemFileName) << std::endl;
         return false;
     }
 
@@ -252,7 +252,7 @@ bool ApiExtractor::run()
         std::cerr << "could not create tempfile in " << qPrintable(QDir::tempPath());
         return false;
     }
-    
+
     // run rpp pre-processor
     if (!preprocess(m_cppFileName, ppFile, m_includePaths)) {
         std::cerr << "Preprocessor failed on file: " << qPrintable(m_cppFileName);
@@ -292,7 +292,6 @@ static bool preprocess(const QString& sourceFile,
     preprocess.push_include_path(".");
     foreach (const QString &include, includes)
         preprocess.push_include_path(QDir::toNativeSeparators(include).toStdString());
-    preprocess.push_include_path("/usr/include");
 
     QString currentDir = QDir::current().absolutePath();
     QFileInfo sourceInfo(sourceFile);
