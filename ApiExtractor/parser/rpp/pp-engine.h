@@ -199,6 +199,7 @@ private:
     bool test_if_level();
 
     inline std::string fix_file_path(std::string const &filename) const;
+    inline std::string pragma_guard(std::string const &filename) const;
     inline bool is_absolute(std::string const &filename) const;
 
     PP_DIRECTIVE_TYPE find_directive(char const *__directive, std::size_t __size) const;
@@ -267,6 +268,9 @@ private:
 
     template <typename _InputIterator>
     _InputIterator handle_endif(_InputIterator __first, _InputIterator __last);
+
+    template <typename _InputIterator>
+    _InputIterator handle_pragma(_InputIterator __first, _InputIterator __last);
 
     template <typename _InputIterator>
     _InputIterator handle_ifdef(bool check_undefined, _InputIterator __first, _InputIterator __last);

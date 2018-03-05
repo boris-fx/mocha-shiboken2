@@ -52,6 +52,20 @@ inline std::string pp::fix_file_path(std::string const &filename) const
 #endif
 }
 
+inline std::string pp::pragma_guard(std::string const &filename) const
+{
+    std::string guard_symbol;
+    guard_symbol.reserve(env.current_file.size());
+    for (auto const c: env.current_file) {
+        if (c == '.' || c == '/' || c == '\\')
+            guard_symbol.push_back('_');
+        else
+            guard_symbol.push_back(::toupper(c));
+    }
+    guard_symbol.insert(0, "PRAGMA_GUARD_");
+    return guard_symbol;
+}
+
 inline bool pp::is_absolute(std::string const &filename) const
 {
 #if defined(PP_OS_WIN)
@@ -125,14 +139,15 @@ bool pp::find_header_protection(_InputIterator __first, _InputIterator __last, s
             __first = skip_blanks(++__first, __last);
             env.current_line += skip_blanks.lines;
 
-            if (__first != __last && *__first == 'i') {
+            if (__first != __last && (*__first == 'i' || *__first == 'p')) {
                 _InputIterator __begin = __first;
                 __first = skip_identifier(__begin, __last);
                 env.current_line += skip_identifier.lines;
 
                 std::string __directive(__begin, __first);
-
-                if (__directive == "ifndef") {
+                const bool is_guard = __directive == "ifndef";
+                const bool is_pragma = __directive == "pragma";
+                if (is_guard || is_pragma) {
                     __first = skip_blanks(__first, __last);
                     env.current_line += skip_blanks.lines;
 
@@ -141,8 +156,18 @@ bool pp::find_header_protection(_InputIterator __first, _InputIterator __last, s
                     env.current_line += skip_identifier.lines;
 
                     if (__begin != __first && __first != __last) {
-                        __prot->assign(__begin, __first);
-                        return true;
+                        if (is_guard) {
+                            __prot->assign(__begin, __first);
+                            return true;
+                        }
+                        else {  //pragma
+                            assert(is_pragma);
+                            std::string pragma_op(__begin, __first);
+                            if (pragma_op == "once") {
+                                *__prot = pragma_guard(env.current_file);
+                                return true;
+                            }
+                        }
                     }
                 }
             }
@@ -349,6 +374,9 @@ _InputIterator pp::handle_directive(char const *__directive, std::size_t __size,
     case PP_IFNDEF:
         return handle_ifdef(true, __first, __last);
 
+    case PP_PRAGMA:
+        return handle_pragma(__first, __last);
+
     default:
         break;
     }
@@ -435,12 +463,13 @@ void pp::operator()(_InputIterator __first, _InputIterator __last, _OutputIterat
 #ifndef PP_NO_SMART_HEADER_PROTECTION
     std::string __prot;
     __prot.reserve(255);
-    pp_fast_string __tmp(__prot.c_str(), __prot.size());
 
-    if (find_header_protection(__first, __last, &__prot)
-        && env.resolve(&__tmp) != 0) {
-        // std::cerr << "** DEBUG found header protection:" << __prot << std::endl;
-        return;
+    if (find_header_protection(__first, __last, &__prot)) {
+        pp_fast_string __tmp(__prot.c_str(), __prot.size());
+        if (env.resolve(&__tmp) != 0) {
+            // std::cerr << "** DEBUG found header protection:" << __prot << std::endl;
+            return;
+        }
     }
 #endif
 
@@ -646,6 +675,19 @@ skip_path:
     env.bind(macro_name, macro);
 
     return __first;
+}
+
+template <typename _InputIterator>
+_InputIterator pp::handle_pragma(_InputIterator __first, _InputIterator __last)
+{
+    std::string pragma_op(__first, __last);
+    if (pragma_op != "once")
+        return __last;
+    std::string protection = pragma_guard(env.current_file);
+    pp_macro macro;
+    pp_fast_string const *macro_name = pp_symbol::get(protection.begin(), protection.end());
+    env.bind(macro_name, macro);
+    return __last;
 }
 
 template <typename _InputIterator>
