@@ -5,7 +5,7 @@
 #  SHIBOKEN_PYTHON_INTERPRETER - Python interpreter (regular or debug) to be used with the bindings.
 #  SHIBOKEN_PYTHON_LIBRARIES   - Python libraries (regular or debug) Shiboken is linked against.
 
-SET(SHIBOKEN_INCLUDE_DIR "@CMAKE_INSTALL_PREFIX@/include/shiboken2@shiboken2_SUFFIX@")
+SET(SHIBOKEN_INCLUDE_DIR "@ISL_SHIBOKEN_INCLUDE_DIR@/shiboken2")
 if(MSVC)
     SET(SHIBOKEN_LIBRARY "@LIB_INSTALL_DIR@/@CMAKE_SHARED_LIBRARY_PREFIX@shiboken2@shiboken2_SUFFIX@@PYTHON_SHARED_LIBRARY_SUFFIX@@LIBRARY_OUTPUT_SUFFIX@.lib")
 elseif(CYGWIN)
