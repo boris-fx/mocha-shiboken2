@@ -1616,19 +1616,19 @@ void ShibokenGenerator::writeAddedProperties(QTextStream& s,
    const QString pyTypeName = cpythonTypeName(context);
    foreach(AddedProperty prop, props) {
       const bool writable = prop.access() == AddedProperty::ReadWrite;
-      OUTPUT << "{" << QString("// Property '%1'").arg(prop.name()) << endl;
+      OUTPUT << "{" << QString::fromLatin1("// Property '%1'").arg(prop.name()) << endl;
       {
          Indentation indentation(INDENT);
-         OUTPUT << QString("if(!PyObject_HasAttrString((PyObject*)&%1, \"%2\"))")
+         OUTPUT << QString::fromLatin1("if(!PyObject_HasAttrString((PyObject*)&%1, \"%2\"))")
             .arg(pyTypeName, prop.name()) << endl;
          OUTPUT << "{" << endl;
          {
             Indentation indentation(INDENT);
-            OUTPUT << QString("static const char * errorString = "
+            OUTPUT << QString::fromLatin1("static const char * errorString = "
                "\"Cannot initialize '%1' property of '%2' class\";")
                .arg(prop.name(), context->qualifiedCppName()) << endl;
-            OUTPUT << QString("PyObject* getterPtr = PyObject_GetAttrString((PyObject*)&%1,").arg(pyTypeName) << endl
-                   << INDENT << QString("const_cast<char*>(\"%1\"));").arg(prop.getter()) << endl;
+            OUTPUT << QString::fromLatin1("PyObject* getterPtr = PyObject_GetAttrString((PyObject*)&%1,").arg(pyTypeName) << endl
+                   << INDENT << QString::fromLatin1("const_cast<char*>(\"%1\"));").arg(prop.getter()) << endl;
             OUTPUT << "if (!getterPtr) {" << endl;
             {
                Indentation indentation(INDENT);
@@ -1637,8 +1637,8 @@ void ShibokenGenerator::writeAddedProperties(QTextStream& s,
             }
             OUTPUT << "}" << endl;
             if (writable) {
-               OUTPUT << QString("PyObject * setterPtr = PyObject_GetAttrString((PyObject*)&%1,").arg(pyTypeName) << endl
-                      << INDENT << QString("const_cast<char*>(\"%1\"));").arg(prop.setter()) << endl;
+               OUTPUT << QString::fromLatin1("PyObject * setterPtr = PyObject_GetAttrString((PyObject*)&%1,").arg(pyTypeName) << endl
+                      << INDENT << QString::fromLatin1("const_cast<char*>(\"%1\"));").arg(prop.setter()) << endl;
                OUTPUT << "if (!setterPtr) {" << endl;
                {
                   Indentation indentation(INDENT);
@@ -1663,13 +1663,13 @@ void ShibokenGenerator::writeAddedProperties(QTextStream& s,
                OUTPUT << "Py_FatalError(errorString);" << endl;
             }
             OUTPUT << "}" << endl;
-            OUTPUT << QString("PyObject_SetAttrString((PyObject*)&%1, ").arg(pyTypeName)
-                   << QString("\"%1\", propObject);").arg(prop.name()) << endl;
+            OUTPUT << QString::fromLatin1("PyObject_SetAttrString((PyObject*)&%1, ").arg(pyTypeName)
+                   << QString::fromLatin1("\"%1\", propObject);").arg(prop.name()) << endl;
             if(prop.removeFuncs()) {
-               OUTPUT << QString("PyObject_DelAttrString((PyObject*)&%1, \"%2\");")
+               OUTPUT << QString::fromLatin1("PyObject_DelAttrString((PyObject*)&%1, \"%2\");")
                   .arg(pyTypeName, prop.getter()) << endl;
                if(writable) {
-                  OUTPUT << QString("PyObject_DelAttrString((PyObject*)&%1, \"%2\");")
+                  OUTPUT << QString::fromLatin1("PyObject_DelAttrString((PyObject*)&%1, \"%2\");")
                   .arg(pyTypeName, prop.setter()) << endl;
                }
             }
@@ -2600,8 +2600,9 @@ QString ShibokenGenerator::cppApiVariableName(const QString& moduleName) const
 QString ShibokenGenerator::internalNamespaceName(const QString& moduleName) const
 {
     QString result = moduleName.isEmpty() ? ShibokenGenerator::packageName() : moduleName;
-    result.replace(".", "_");
-    result.append("_details");
+    result.replace(QLatin1Char('.'), QLatin1Char('_'));
+    result.prepend(QLatin1String("Sbk"));
+    result.append(QLatin1String("_details"));
     return result;
 }
 

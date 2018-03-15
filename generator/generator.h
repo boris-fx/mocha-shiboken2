@@ -439,7 +439,7 @@ private:
 inline QTextStream &operator <<(QTextStream &s, const Indentor &indentor)
 {
     for (int i = 0; i < indentor.indent; ++i)
-        s << "    ";
+        s << "   ";
     return s;
 }
 

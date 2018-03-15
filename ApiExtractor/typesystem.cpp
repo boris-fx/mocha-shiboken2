@@ -1007,10 +1007,13 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
         fetchAttributeValues(tagName, atts, &attributes);
         double since = attributes[sinceAttribute()].toDouble();
 
-        const int validParent = StackElement::TypeEntryMask
+        static const int validParent = StackElement::TypeEntryMask
                                 | StackElement::ModifyFunction
-                                | StackElement::ModifyField;
-        if (m_current->parent && m_current->parent->type & validParent) {
+                                | StackElement::ModifyField
+                                | StackElement::AddProperty
+                                | StackElement::AddFunction;
+        if ((m_current->parent && (m_current->parent->type & validParent))
+              || m_current->type == StackElement::Root) {
             QString modeName = attributes[QLatin1String("mode")];
             TypeSystem::DocModificationMode mode;
             if (modeName == QLatin1String("append")) {
@@ -1118,12 +1121,12 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
             attributes.insert(QLatin1String("static"), QLatin1String("no"));
             break;
         case StackElement::AddProperty:
-           attributes["name"] = QString();
-           attributes["getter"] = QString();
-           attributes["setter"] = QString();
-           attributes["remove-funcs"] = "yes";
-           attributes["scalar-type"] = QString();
-           attributes["class-type"] = QString();
+           attributes.insert(QLatin1String("name"), QString());
+           attributes.insert(QLatin1String("getter"), QString());
+           attributes.insert(QLatin1String("setter"), QString());
+           attributes.insert(QLatin1String("remove-funcs"), QLatin1String("yes"));
+           attributes.insert(QLatin1String("scalar-type"), QString());
+           attributes.insert(QLatin1String("class-type"), QString());
            break;
         case StackElement::ModifyFunction:
             attributes.insert(QLatin1String("signature"), QString());
@@ -1135,7 +1138,7 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
             attributes.insert(QLatin1String("virtual-slot"), QLatin1String("no"));
             attributes.insert(QLatin1String("thread"), QLatin1String("no"));
             attributes.insert(QLatin1String("allow-thread"), QLatin1String("no"));
-            attributes.insert(QLatin1String("skip-for-doc"), QString("no"));
+            attributes.insert(QLatin1String("skip-for-doc"), QLatin1String("no"));
             break;
         case StackElement::ModifyArgument:
             attributes.insert(QLatin1String("index"), QString());
@@ -1656,29 +1659,31 @@ bool Handler::startElement(const QStringRef &n, const QXmlStreamAttributes &atts
         break;
         case StackElement::AddProperty: {
            if(!(topElement.type & (StackElement::ObjectTypeEntry | StackElement::ValueTypeEntry))) {
-              m_error = QString::fromLatin1("Add property requires a object type or value type as parent"
+              m_error = QString::fromLatin1("Add property requires an object type or value type as parent"
                                             ", was=%1").arg(topElement.type, 0, 16);
               return false;
            }
-           QString name = attributes["name"];
+           QString name = attributes[QLatin1String("name")];
            if (name.isEmpty()) {
-              m_error = "No name for the added property";
+              m_error = QString::fromLatin1("No name for the added property");
               return false;
            }
-           QString getter = attributes["getter"];
+           QString getter = attributes[QLatin1String("getter")];
            if (getter.isEmpty()) {
-              m_error = "Property requires a getter at least";
+              m_error = QString::fromLatin1("Property requires a getter at least");
               return false;
            }
-           QString setter = attributes["setter"];
+           QString setter = attributes[QLatin1String("setter")];
            AddedProperty prop(name, getter, setter);
-           prop.setRemoveFuncs(attributes["remove-funcs"] == "yes");
+           prop.setRemoveFuncs(attributes[QLatin1String("remove-funcs")] ==
+                 QLatin1String("yes"));
 
-           QString scalarType = attributes["scalar-type"],
-                   classType  = attributes["class-type"];
+           QString scalarType = attributes[QLatin1String("scalar-type")],
+                   classType  = attributes[QLatin1String("class-type")];
 
            if (!scalarType.isEmpty() && !classType.isEmpty()) {
-              m_error = "type requires only one specified attribute (scalar-type or class-type)";
+              m_error = QString::fromLatin1("type requires only one specified "
+                                            "attribute (scalar-type or class-type)");
               return false;
            }
 

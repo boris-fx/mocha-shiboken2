@@ -97,9 +97,12 @@ reset_qApp_var()
 
     for (mod_ptr = qApp_moduledicts; *mod_ptr != NULL; mod_ptr++) {
         // We respect whatever the user may have set.
-        if (PyDict_GetItem(*mod_ptr, qApp_var) == NULL)
-            if (PyDict_SetItem(*mod_ptr, qApp_var, qApp_content) < 0)
+        if (PyDict_GetItem(*mod_ptr, qApp_var) == NULL) {
+            int result = PyDict_SetItem(*mod_ptr, qApp_var, qApp_content);
+            if (result < 0)
                 return -1;
+            Py_INCREF(qApp_content);
+        }
     }
     return 0;
 }

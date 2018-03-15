@@ -57,7 +57,7 @@ inline std::string pp::pragma_guard(std::string const &filename) const
     std::string guard_symbol;
     guard_symbol.reserve(env.current_file.size());
     for (auto const c: env.current_file) {
-        if (c == '.' || c == '/' || c == '\\')
+        if (!::isalpha(c))
             guard_symbol.push_back('_');
         else
             guard_symbol.push_back(::toupper(c));
@@ -145,7 +145,8 @@ bool pp::find_header_protection(_InputIterator __first, _InputIterator __last, s
                 env.current_line += skip_identifier.lines;
 
                 std::string __directive(__begin, __first);
-                const bool is_guard = __directive == "ifndef";
+                // Disabling include guard euristic as it's always been broken
+                const bool is_guard = false;//__directive == "ifndef";
                 const bool is_pragma = __directive == "pragma";
                 if (is_guard || is_pragma) {
                     __first = skip_blanks(__first, __last);

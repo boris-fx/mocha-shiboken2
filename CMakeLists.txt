@@ -4,10 +4,37 @@ project(shiboken2)
 cmake_minimum_required(VERSION 3.0)
 cmake_policy(VERSION 3.0)
 
+if(ISL_QT_NAMESPACE)
+    add_definitions(-DQT_NAMESPACE=${ISL_QT_NAMESPACE})
+endif()
+if(ISL_QT_NAMESPACE_MAC_CRC)
+    add_definitions(-DQT_NAMESPACE_MAC_CRC=${ISL_QT_NAMESPACE_MAC_CRC})
+endif()
+
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/Modules/
                       ${CMAKE_MODULE_PATH})
 
-find_package(Qt5 REQUIRED COMPONENTS Core Xml XmlPatterns)
+if(CMAKE_BUILD_TYPE)
+    string(TOLOWER "${CMAKE_BUILD_TYPE}" ISL_BUILD_TYPE)
+else()
+    set(ISL_BUILD_TYPE "debug")
+endif()
+
+if(NOT ISL_QT_ROOT_DIR)
+    message(FATAL_ERROR "ISL_QT_ROOT_DIR is not set")
+endif()
+
+if(NOT ISL_DEPENDENCIES_ROOT)
+    set(ISL_DEPENDENCIES_ROOT "../")
+    message(WARNING "ISL_DEPENDENCIES_ROOT isn't set. Assuming ${ISL_DEPENDENCIES_ROOT}")
+endif()
+
+if(NOT ISL_LINKAGE_MODE_TOKEN)
+    set(ISL_LINKAGE_MODE_TOKEN "shared")
+    message(WARNING "ISL_LINKAGE_MODE_TOKEN isn't set. Assuming ${ISL_LINKAGE_MODE_TOKEN}")
+endif()
+
+find_package(Qt5 REQUIRED COMPONENTS Core Xml)
 
 add_definitions(${Qt5Core_DEFINITIONS})
 
@@ -17,25 +44,53 @@ set(shiboken_MICRO_VERSION "0")
 set(shiboken2_VERSION "${shiboken_MAJOR_VERSION}.${shiboken_MINOR_VERSION}.${shiboken_MICRO_VERSION}")
 set(shiboken2_library_so_version "${shiboken_MAJOR_VERSION}.${shiboken_MINOR_VERSION}")
 
-option(BUILD_TESTS "Build tests." TRUE)
-option(USE_PYTHON_VERSION "Use specific python version to build shiboken2." "")
+option(BUILD_TESTS "Build tests." FALSE)
 
-if (USE_PYTHON_VERSION)
-    find_package(PythonInterp ${USE_PYTHON_VERSION} REQUIRED)
-    find_package(PythonLibs ${USE_PYTHON_VERSION} REQUIRED)
-else()
-    find_package(PythonInterp 2.6)
-    find_package(PythonLibs 2.6)
+# Python definitions
+set(PYTHON_DIRECTORY "${ISL_DEPENDENCIES_ROOT}/python/${ISL_PYTHON_VERSION}/${ISL_TARGET_OS}/${ISL_BUILD_TYPE}/${ISL_LINKAGE_MODE_TOKEN}")
+if(NOT EXISTS ${PYTHON_DIRECTORY})
+   message(FATAL_ERROR "${PYTHON_DIRECTORY} does not exist")
 endif()
 
+# Unfortunately, FIND_FILE/FIND_PATH are non-recursive functions
+find_path(PYTHON_INCLUDE_PATH
+     Python.h
+     PATHS "${PYTHON_DIRECTORY}/include"
+     NO_SYSTEM_ENVIRONMENT_PATH
+)
+
+file(GLOB_RECURSE _python_h_file "${PYTHON_DIRECTORY}/include/*Python.h")
+get_filename_component(PYTHON_INCLUDE_PATH ${_python_h_file} PATH)
+
+if(NOT EXISTS ${PYTHON_INCLUDE_PATH})
+    message(FATAL_ERROR "Can't find Python.h file in directory ${PYTHON_DIRECTORY}/include")
+endif()
+
+set(PYTHON_INCLUDE_DIRS ${PYTHON_INCLUDE_PATH})
+
+string(REGEX REPLACE "^([0-9]+)\\.[0-9]+\\.[0-9]+$" "\\1" PYTHON_VERSION_MAJOR "${ISL_PYTHON_VERSION}")
+string(REGEX REPLACE "^[0-9]+\\.([0-9]+)\\.[0-9]+$" "\\1" PYTHON_VERSION_MINOR "${ISL_PYTHON_VERSION}")
+string(REGEX REPLACE "^[0-9]+\\.[0-9]+\\.([0-9]+)$" "\\1" PYTHON_VERSION_PATCH "${ISL_PYTHON_VERSION}")
+set(PYTHON_SUFFIX "-python${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}")
+
+find_library(PYTHON_LIBRARIES
+    NAMES "python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR}" 
+    "python${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}" "python"
+    PATHS "${PYTHON_DIRECTORY}/lib"
+    NO_DEFAULT_PATH)
+find_program(PYTHON_EXECUTABLE
+    NAMES "python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR}" 
+    "python${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}" "python" 
+    PATHS "${PYTHON_DIRECTORY}/bin"
+    NO_SYSTEM_ENVIRONMENT_PATH NO_DEFAULT_PATH)
+set(PYTHON_DEBUG_LIBRARIES ${PYTHON_LIBRARIES})
+
 ## For debugging the PYTHON* variables
-message("PYTHONLIBS_FOUND: " ${PYTHONLIBS_FOUND})
-message("PYTHON_LIBRARIES: " ${PYTHON_LIBRARIES})
-message("PYTHON_INCLUDE_DIRS: " ${PYTHON_INCLUDE_DIRS})
-message("PYTHON_DEBUG_LIBRARIES: " ${PYTHON_DEBUG_LIBRARIES})
-message("PYTHONINTERP_FOUND: " ${PYTHONINTERP_FOUND})
-message("PYTHON_EXECUTABLE: " ${PYTHON_EXECUTABLE})
-message("PYTHON_VERSION: " ${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.${PYTHON_VERSION_PATCH})
+message(STATUS "PYTHON_LIBRARIES: " ${PYTHON_LIBRARIES})
+message(STATUS "PYTHON_INCLUDE_DIRS: " ${PYTHON_INCLUDE_DIRS})
+message(STATUS "PYTHON_DEBUG_LIBRARIES: " ${PYTHON_DEBUG_LIBRARIES})
+message(STATUS "PYTHON_EXECUTABLE: " ${PYTHON_EXECUTABLE})
+message(STATUS "PYTHON_VERSION: " ${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.${PYTHON_VERSION_PATCH})
 
 macro(get_python_extension_suffix)
   # Result of imp.get_suffixes() depends on the platform, but generally looks something like:
@@ -106,6 +161,8 @@ if (NOT PYTHON_SITE_PACKAGES)
         message(STATUS "!!! The generated bindings will be installed on ${PYTHON_SITE_PACKAGES}, is it right!?")
     endif()
 endif()
+
+# End of Python definitions
 
 if(MSVC)
     # Qt5: this flag has changed from /Zc:wchar_t- in Qt4.X
@@ -266,7 +323,7 @@ add_subdirectory(libshiboken)
 add_subdirectory(doc)
 
 # deps found, compile the generator.
-if (Qt5Core_FOUND AND PYTHONINTERP_FOUND)
+if (Qt5Core_FOUND)
     add_subdirectory(generator)
     add_subdirectory(shibokenmodule)
 

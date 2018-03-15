@@ -5388,7 +5388,7 @@ bool CppGenerator::finishGeneration()
 
     // cleanup staticMetaObject attribute
     if (usePySideExtensions()) {
-        s << "void cleanTypesAttributes(void) {" << endl;
+        s << "static void cleanTypesAttributes(void) {" << endl;
         s << INDENT << "for (int i = 0, imax = SBK_" << moduleName() << "_IDX_COUNT; i < imax; i++) {" << endl;
         {
             Indentation indentation(INDENT);
@@ -5453,8 +5453,8 @@ bool CppGenerator::finishGeneration()
     s << "{" << endl;
     {
         foreach (const QString& requiredModule, requiredModules) {
-            s << "PyTypeObject** " << cppApiVariableName(requiredModule) << ';' << endl;
-            s << "SbkConverter** " << convertersVariableName(requiredModule) << ';' << endl;
+            s << INDENT << "PyTypeObject** " << cppApiVariableName(requiredModule) << ';' << endl;
+            s << INDENT << "SbkConverter** " << convertersVariableName(requiredModule) << ';' << endl;
         }
     }
     s << "}" << endl;

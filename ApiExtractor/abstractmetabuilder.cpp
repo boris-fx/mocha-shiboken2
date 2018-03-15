@@ -302,6 +302,9 @@ void AbstractMetaBuilderPrivate::traverseOperatorFunction(FunctionModelItem item
     bool firstArgumentIsSelf = true;
     bool unaryOperator = false;
 
+    if(item->name() == QLatin1String("operator~"))
+        qDebug() << "GOTCHA!";
+
     baseoperandClass = argumentToClass(arguments.at(0));
 
     if (arguments.size() == 1) {
@@ -679,7 +682,7 @@ void AbstractMetaBuilderPrivate::traverseDom(const FileModelItem &dom)
         binaryOperators.append(dom->findFunctions(QStringLiteral("operator&")));
         binaryOperators.append(dom->findFunctions(QStringLiteral("operator|")));
         binaryOperators.append(dom->findFunctions(QStringLiteral("operator^")));
-        binaryOperators.append(dom->findFunctions(QStringLiteral("operator~")));
+        //binaryOperators.append(dom->findFunctions(QStringLiteral("operator~")));  // binary operator? Really?
         binaryOperators.append(dom->findFunctions(QStringLiteral("operator>")));
 
         foreach (const FunctionModelItem &item, binaryOperators)
