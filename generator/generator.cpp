@@ -327,7 +327,9 @@ bool Generator::generateFileForContext(GeneratorContext &context)
     case FileOut::Unchanged:
         // Even if contents is unchanged, the last file modification time should be updated,
         // so that the build system can rely on the fact the generated file is up-to-date.
-        touchFile(filePath);
+
+        // Unfortunately it increases build time significantly. Disabling it.
+        // touchFile(filePath);
         break;
     case FileOut::Success:
         break;
