@@ -40,6 +40,7 @@ class TemplateEntry;
 class TypeEntry;
 
 struct AddedFunction;
+struct AddedProperty;
 struct FieldModification;
 struct FunctionModification;
 

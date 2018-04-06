@@ -34,7 +34,7 @@ if(NOT ISL_LINKAGE_MODE_TOKEN)
     message(WARNING "ISL_LINKAGE_MODE_TOKEN isn't set. Assuming ${ISL_LINKAGE_MODE_TOKEN}")
 endif()
 
-find_package(Qt5 REQUIRED COMPONENTS Core Xml)
+find_package(Qt5 REQUIRED COMPONENTS Core Xml XmlPatterns)
 
 add_definitions(${Qt5Core_DEFINITIONS})
 
@@ -59,7 +59,7 @@ find_path(PYTHON_INCLUDE_PATH
      NO_SYSTEM_ENVIRONMENT_PATH
 )
 
-file(GLOB_RECURSE _python_h_file "${PYTHON_DIRECTORY}/include/*Python.h")
+file(GLOB_RECURSE _python_h_file "${PYTHON_DIRECTORY}/*Python.h")
 get_filename_component(PYTHON_INCLUDE_PATH ${_python_h_file} PATH)
 
 if(NOT EXISTS ${PYTHON_INCLUDE_PATH})
@@ -132,19 +132,11 @@ endif()
 
 if (NOT PYTHON_SHARED_LIBRARY_SUFFIX)
   set(PYTHON_SHARED_LIBRARY_SUFFIX "${PYTHON_CONFIG_SUFFIX}")
-
-  # Append a "v" to disambiguate the python version and the shiboken version in the
-  # shared library file name.
-  if (APPLE AND PYTHON_VERSION_MAJOR EQUAL 2)
-      set(PYTHON_SHARED_LIBRARY_SUFFIX "${PYTHON_SHARED_LIBRARY_SUFFIX}v")
-  endif()
 endif()
-
 
 message(STATUS "PYTHON_EXTENSION_SUFFIX:      ${PYTHON_EXTENSION_SUFFIX}")
 message(STATUS "PYTHON_CONFIG_SUFFIX:         ${PYTHON_CONFIG_SUFFIX}")
 message(STATUS "PYTHON_SHARED_LIBRARY_SUFFIX: ${PYTHON_SHARED_LIBRARY_SUFFIX}")
-
 
 if (NOT PYTHON_SITE_PACKAGES)
     execute_process(

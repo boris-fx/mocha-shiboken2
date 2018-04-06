@@ -3,9 +3,10 @@ project(apiextractor)
 if(CMAKE_HOST_APPLE)
    find_package(LibXml2 2.6.32)
    find_package(LibXslt 1.1.19)
+   option(DISABLE_DOCSTRINGS "Disable documentation extraction." FALSE)
+else()
+   option(DISABLE_DOCSTRINGS "Disable documentation extraction." TRUE)
 endif()
-
-option(DISABLE_DOCSTRINGS "Disable documentation extraction." TRUE)
 
 if (NOT DISABLE_DOCSTRINGS)
     if (NOT LIBXSLT_FOUND OR NOT LIBXML2_FOUND)
@@ -94,6 +95,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}
 add_library(apiextractor STATIC ${apiextractor_SRC} ${apiextractor_RCCS_SRC})
 target_link_libraries(apiextractor
                       ${Qt5Xml_LIBRARIES}
+                      ${Qt5XmlPatterns_LIBRARIES}
                       ${APIEXTRACTOR_EXTRA_LIBRARIES}
                       )
 

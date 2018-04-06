@@ -88,7 +88,7 @@ static bool functionSort(const AbstractMetaFunction* func1, const AbstractMetaFu
 
 static QString createRepeatedChar(int i, char c)
 {
-   return QString(i, c);
+   return QString(i, QLatin1Char(c));
 }
 
 static QString escape(QString str)
@@ -1188,20 +1188,21 @@ void QtDocGenerator::writePropertyList(QTextStream& s, const AbstractMetaClass* 
       QStringList propList;
 
       foreach(const AddedProperty & prop, props) {
-         QString propStr = QString("property :attr:`%1<%2>` [%3] of ")
+         QString propStr = QString(QStringLiteral("property :attr:`%1<%2>` [%3] of "))
                .arg(prop.name())
-               .arg(QString("%1.%2")
+               .arg(QString(QStringLiteral("%1.%2"))
                     .arg(cppClass->qualifiedCppName())
                     .arg(prop.name()))
-               .arg(prop.access() == AddedProperty::ReadWrite ? "read-write" : "read-only");
+               .arg(prop.access() == AddedProperty::ReadWrite ?
+                     QLatin1String("read-write") : QLatin1String("read-only"));
          QString scalarType = prop.scalarType(),
                  classType  = prop.classType();
          if (!scalarType.isEmpty()) {
             propStr += scalarType;
          } else if (!classType.isEmpty()) {
-            propStr += QString(":class:`%1`").arg(classType);
+            propStr += QString(QStringLiteral(":class:`%1`")).arg(classType);
          } else {
-            propStr += "unknown type";
+            propStr += QLatin1String("unknown type");
          }
          propList << propStr;
       }
@@ -1588,7 +1589,7 @@ namespace {
 
 void QtDocGenerator::writeProperty(QTextStream& s, const AbstractMetaClass* cppClass, const AddedProperty& prop)
 {
-   s << QString("%1.%2")
+   s << QString(QStringLiteral("%1.%2"))
         .arg(cppClass->qualifiedCppName())
         .arg(prop.name()) << endl << endl << endl;
    {
@@ -1599,7 +1600,7 @@ void QtDocGenerator::writeProperty(QTextStream& s, const AbstractMetaClass* cppC
       if (!scalarType.isEmpty()) {
          s << scalarType;
       } else if (!classType.isEmpty()) {
-         s << QString(":class:`%1.%2`").arg(cppClass->package()).arg(classType);
+         s << QString(QStringLiteral(":class:`%1.%2`")).arg(cppClass->package()).arg(classType);
       } else {
          s << "unknown type";
       }
@@ -1620,13 +1621,13 @@ void QtDocGenerator::writeProperty(QTextStream& s, const AbstractMetaClass* cppC
             continue;
          doc.setValue(mod.code(), fmt);
          switch (mod.mode()) {
-            case DocModification::Append:
+            case TypeSystem::DocModificationAppend:
                appendDocs.push_back(doc);
                break;
-            case DocModification::Prepend:
+            case TypeSystem::DocModificationPrepend:
                prependDocs.push_back(doc);
                break;
-            case DocModification::Replace:
+            case TypeSystem::DocModificationReplace:
                replaceDocs.push_back(doc);
                break;
             default:
@@ -1727,7 +1728,7 @@ bool QtDocGenerator::finishGeneration()
         /* Avoid showing "Detailed Description for *every* class in toc tree */
         Indentation indentation(INDENT);
 
-        TypeEntry* typesystemEntry = TypeDatabase::instance()->findTypes(it.key())[0];
+        TypeEntry* typesystemEntry = TypeDatabase::instance()->findType(it.key());
         std::vector<Documentation> prependDocs, appendDocs, replaceDocs;
         foreach (DocModification mod, typesystemEntry->docModifications()) {
            if (!mod.signature().isEmpty())
@@ -1742,13 +1743,13 @@ bool QtDocGenerator::finishGeneration()
               continue;
            doc.setValue(mod.code(), fmt);
            switch (mod.mode()) {
-              case DocModification::Append:
+              case TypeSystem::DocModificationAppend:
                  appendDocs.push_back(doc);
                  break;
-              case DocModification::Prepend:
+              case TypeSystem::DocModificationPrepend:
                  prependDocs.push_back(doc);
                  break;
-              case DocModification::Replace:
+              case TypeSystem::DocModificationReplace:
                  replaceDocs.push_back(doc);
                  break;
               default:
@@ -1791,7 +1792,7 @@ bool QtDocGenerator::finishGeneration()
         AbstractMetaFunctionList globalFuncs = globalFunctions(); // FIXME: use package functions only
         if (!globalFuncs.isEmpty())
         {
-           FileOut foutput(outputDir + "/GlobalFunctions.rst");
+           FileOut foutput(outputDir + QLatin1String("/GlobalFunctions.rst"));
            QTextStream& fs = foutput.stream;
            // Header
            fs << ".. module:: " << it.key() << endl << endl;
@@ -1803,7 +1804,7 @@ bool QtDocGenerator::finishGeneration()
               foreach (AbstractMetaFunction* function, globalFuncs) {
                  if (shouldSkip(function))
                     continue;
-                 QString funcName = QString("%1.%2").arg(it.key()).arg(getFuncName(function));
+                 QString funcName = QString(QStringLiteral("%1.%2")).arg(it.key()).arg(getFuncName(function));
                  fs << "*" << INDENT << ":func:`" << funcName << "`" << endl;
               }
            }
@@ -1817,7 +1818,7 @@ bool QtDocGenerator::finishGeneration()
               foreach (AbstractMetaFunction* function, globalFuncs) {
                  if (shouldSkip(function))
                     continue;
-                 QString funcName = QString("%1.%2").arg(it.key()).arg(getFuncName(function));
+                 QString funcName = QString(QStringLiteral("%1.%2")).arg(it.key()).arg(getFuncName(function));
                  fs << ".. function:: " << funcName << "(" << parseArgDocStyle(function) << ")" << endl;
                  writeFunctionParametersType(fs, NULL, function);
                  fs << endl;
