@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2017 The Qt Company Ltd.
+** Copyright (C) 2018 The Qt Company Ltd.
 ** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of PySide2.
@@ -26,19 +26,51 @@
 **
 ****************************************************************************/
 
-#ifndef CODEMODEL_ENUMS_H
-#define CODEMODEL_ENUMS_H
+#include "enumvalue.h"
 
-enum ReferenceType {
-    NoReference,
-    LValueReference,
-    RValueReference
-};
+#include <QtCore/QDebug>
+#include <QtCore/QString>
+#include <QtCore/QTextStream>
 
-enum EnumKind {
-    CEnum,         // Standard C: enum Foo { value1, value2 }
-    AnonymousEnum, //             enum { value1, value2 }
-    EnumClass      // C++ 11    : enum class Foo { value1, value2 }
-};
+QString EnumValue::toString() const
+{
+    return m_type == EnumValue::Signed
+        ? QString::number(m_value) : QString::number(m_unsignedValue);
+}
 
-#endif // CODEMODEL_ENUMS_H
+void EnumValue::setValue(qint64 v)
+{
+    m_value = v;
+    m_type = Signed;
+}
+
+void EnumValue::setUnsignedValue(quint64 v)
+{
+    m_unsignedValue = v;
+    m_type = Unsigned;
+}
+
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug d,const EnumValue &v)
+{
+    QDebugStateSaver saver(d);
+    d.nospace();
+    d.noquote();
+    d << "EnumValue(";
+    if (v.m_type == EnumValue::Signed)
+        d << v.m_value;
+    else
+        d << v.m_unsignedValue << 'u';
+    d << ')';
+    return d;
+}
+#endif // !QT_NO_DEBUG_STREAM
+
+QTextStream &operator<<(QTextStream &s, const EnumValue &v)
+{
+    if (v.m_type == EnumValue::Signed)
+        s << v.m_value;
+    else
+        s << v.m_unsignedValue;
+    return s;
+}

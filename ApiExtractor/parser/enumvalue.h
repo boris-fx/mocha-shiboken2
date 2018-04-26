@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2017 The Qt Company Ltd.
+** Copyright (C) 2018 The Qt Company Ltd.
 ** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of PySide2.
@@ -26,19 +26,45 @@
 **
 ****************************************************************************/
 
-#ifndef CODEMODEL_ENUMS_H
-#define CODEMODEL_ENUMS_H
+#ifndef ENUMVALUE_H
+#define ENUMVALUE_H
 
-enum ReferenceType {
-    NoReference,
-    LValueReference,
-    RValueReference
+#include <QtCore/QtGlobal>
+
+QT_FORWARD_DECLARE_CLASS(QDebug)
+QT_FORWARD_DECLARE_CLASS(QString)
+QT_FORWARD_DECLARE_CLASS(QTextStream)
+
+class EnumValue
+{
+public:
+    enum Type
+    {
+        Signed,
+        Unsigned
+    };
+
+    QString toString() const;
+
+    Type type() { return m_type; }
+    qint64 value() const { return m_value; }
+    quint64 unsignedValue() const { return m_unsignedValue; }
+
+    void setValue(qint64 v);
+    void setUnsignedValue(quint64 v);
+
+private:
+#ifndef QT_NO_DEBUG_STREAM
+    friend QDebug operator<<(QDebug, const EnumValue &);
+#endif
+    friend QTextStream &operator<<(QTextStream &, const EnumValue &);
+
+    union
+    {
+        qint64 m_value = 0;
+        quint64 m_unsignedValue;
+    };
+    Type m_type = Signed;
 };
 
-enum EnumKind {
-    CEnum,         // Standard C: enum Foo { value1, value2 }
-    AnonymousEnum, //             enum { value1, value2 }
-    EnumClass      // C++ 11    : enum class Foo { value1, value2 }
-};
-
-#endif // CODEMODEL_ENUMS_H
+#endif // ENUMVALUE_H
